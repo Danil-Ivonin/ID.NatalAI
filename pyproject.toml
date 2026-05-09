@@ -1,0 +1,11 @@
+[project]
+name = "id-natalai"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.136.1",
+    "kerykeion>=5.12.8",
+    "sqlalchemy>=2.0.49",
+]
