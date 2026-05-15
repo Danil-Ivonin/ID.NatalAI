@@ -21,6 +21,15 @@ class PersonaRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    @staticmethod
+    def _read_options():
+        return (
+            selectinload(Persona.style_profile),
+            selectinload(Persona.quotes),
+            selectinload(Persona.phrase_templates),
+            selectinload(Persona.style_examples),
+        )
+
     async def create(self, data: PersonaCreate) -> Persona:
         persona = Persona(
             name=data.name,
@@ -44,8 +53,10 @@ class PersonaRepository:
         )
         self.session.add(persona)
         await self.session.flush()
-        await self.session.refresh(persona)
-        return persona
+        loaded_persona = await self.get(persona.id)
+        if loaded_persona is None:
+            raise LookupError("Created persona could not be loaded")
+        return loaded_persona
 
     async def update(self, persona_id: UUID, data: PersonaUpdate) -> Persona | None:
         persona = await self.get(persona_id)
@@ -65,19 +76,16 @@ class PersonaRepository:
                     setattr(persona.style_profile, field, value)
 
         await self.session.flush()
-        await self.session.refresh(persona)
-        return persona
+        loaded_persona = await self.get(persona_id)
+        if loaded_persona is None:
+            raise LookupError("Updated persona could not be loaded")
+        return loaded_persona
 
     async def get(self, persona_id: UUID) -> Persona | None:
         statement = (
             select(Persona)
             .where(Persona.id == persona_id)
-            .options(
-                selectinload(Persona.style_profile),
-                selectinload(Persona.quotes),
-                selectinload(Persona.phrase_templates),
-                selectinload(Persona.style_examples),
-            )
+            .options(*self._read_options())
         )
         result = await self.session.execute(statement)
         return result.scalar_one_or_none()
@@ -85,7 +93,7 @@ class PersonaRepository:
     async def list(self) -> list[Persona]:
         statement = (
             select(Persona)
-            .options(selectinload(Persona.style_profile))
+            .options(*self._read_options())
             .order_by(Persona.created_at)
         )
         result = await self.session.execute(statement)
@@ -95,12 +103,7 @@ class PersonaRepository:
         statement = (
             select(Persona)
             .where(Persona.id == persona_id, Persona.is_active.is_(True))
-            .options(
-                selectinload(Persona.style_profile),
-                selectinload(Persona.quotes),
-                selectinload(Persona.phrase_templates),
-                selectinload(Persona.style_examples),
-            )
+            .options(*self._read_options())
         )
         result = await self.session.execute(statement)
         return result.scalar_one_or_none()

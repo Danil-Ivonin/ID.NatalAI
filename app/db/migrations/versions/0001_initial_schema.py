@@ -70,6 +70,13 @@ def upgrade() -> None:
         ["type", "is_active"],
         unique=False,
     )
+    op.create_index(
+        "ix_prompt_templates_one_active_per_type",
+        "prompt_templates",
+        ["type"],
+        unique=True,
+        postgresql_where=sa.text("is_active IS true"),
+    )
 
     op.create_table(
         "persona_phrase_templates",
@@ -245,6 +252,7 @@ def downgrade() -> None:
     op.drop_table("persona_style_examples")
     op.drop_table("persona_quotes")
     op.drop_table("persona_phrase_templates")
+    op.drop_index("ix_prompt_templates_one_active_per_type", table_name="prompt_templates")
     op.drop_index("ix_prompt_templates_type_active", table_name="prompt_templates")
     op.drop_table("prompt_templates")
     op.drop_index("ix_personas_slug", table_name="personas")

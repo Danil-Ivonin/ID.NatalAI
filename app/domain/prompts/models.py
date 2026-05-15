@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 
 class PromptTemplate(Base):
     __tablename__ = "prompt_templates"
-    __table_args__ = (Index("ix_prompt_templates_type_active", "type", "is_active"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -27,6 +26,15 @@ class PromptTemplate(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     template_metadata: Mapped[dict[str, Any]] = mapped_column(
         "metadata", JSONB, nullable=False
+    )
+    __table_args__ = (
+        Index("ix_prompt_templates_type_active", "type", "is_active"),
+        Index(
+            "ix_prompt_templates_one_active_per_type",
+            "type",
+            unique=True,
+            postgresql_where=is_active.is_(True),
+        ),
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -38,6 +38,11 @@ class FakeSession:
         return self.get_result
 
 
+class FakeWriteSession(FakeSession):
+    async def refresh(self, instance) -> None:
+        raise AssertionError("repository should re-query instead of refreshing")
+
+
 class FakeScalarResult:
     def __init__(self, values) -> None:
         self.values = values
@@ -171,11 +176,18 @@ async def test_generation_save_result_sets_completed_state() -> None:
 
 
 @pytest.mark.asyncio
-async def test_persona_create_builds_nested_context_data() -> None:
+async def test_persona_create_builds_nested_context_data(monkeypatch) -> None:
     from app.repositories.persona_repository import PersonaRepository
 
-    session = FakeSession()
+    session = FakeWriteSession()
     repository = PersonaRepository(session)
+    loaded_persona = object()
+
+    async def fake_get(persona_id):
+        assert persona_id == session.added[0].id
+        return loaded_persona
+
+    monkeypatch.setattr(repository, "get", fake_get)
 
     persona = await repository.create(
         PersonaCreate(
@@ -210,14 +222,15 @@ async def test_persona_create_builds_nested_context_data() -> None:
         )
     )
 
-    assert session.added == [persona]
-    assert persona.style_profile.voice_description == "Blunt, warm, and impatient."
-    assert [quote.text for quote in persona.quotes] == [
+    created_persona = session.added[0]
+    assert persona is loaded_persona
+    assert created_persona.style_profile.voice_description == "Blunt, warm, and impatient."
+    assert [quote.text for quote in created_persona.quotes] == [
         "Better out than in.",
         "Forbidden quote.",
     ]
-    assert persona.phrase_templates[0].template == "{subject}, listen."
-    assert persona.style_examples[0].tags == ["advice"]
+    assert created_persona.phrase_templates[0].template == "{subject}, listen."
+    assert created_persona.style_examples[0].tags == ["advice"]
 
 
 @pytest.mark.asyncio
@@ -294,11 +307,36 @@ async def test_persona_context_loading_methods_execute_queries_and_return_result
 
 
 @pytest.mark.asyncio
-async def test_prompt_template_create_uses_metadata_alias() -> None:
+async def test_persona_get_and_list_eager_load_all_read_relationships() -> None:
+    from app.repositories.persona_repository import PersonaRepository
+
+    session = FakeExecuteSession(
+        [
+            FakeExecuteResult(scalar=None),
+            FakeExecuteResult(scalars=[]),
+        ]
+    )
+    repository = PersonaRepository(session)
+
+    await repository.get(uuid4())
+    await repository.list()
+
+    assert len(session.executed[0]._with_options) == 4
+    assert len(session.executed[1]._with_options) == 4
+
+
+@pytest.mark.asyncio
+async def test_prompt_template_create_uses_metadata_alias(monkeypatch) -> None:
     from app.repositories.prompt_template_repository import PromptTemplateRepository
 
     session = FakeSession()
     repository = PromptTemplateRepository(session)
+
+    async def fake_list(template_type=None):
+        assert template_type == PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION
+        return []
+
+    monkeypatch.setattr(repository, "list", fake_list)
 
     template = await repository.create(
         PromptTemplateCreate(
@@ -313,6 +351,42 @@ async def test_prompt_template_create_uses_metadata_alias() -> None:
     assert session.added == [template]
     assert template.template_metadata == {"model": "test-model"}
     assert template.is_active is True
+
+
+@pytest.mark.asyncio
+async def test_prompt_template_create_active_deactivates_existing_same_type(monkeypatch) -> None:
+    from app.repositories.prompt_template_repository import PromptTemplateRepository
+
+    active = PromptTemplate(
+        id=uuid4(),
+        name="Profile v1",
+        type=PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION,
+        version=1,
+        content="old",
+        is_active=True,
+        template_metadata={},
+    )
+    repository = PromptTemplateRepository(FakeSession())
+
+    async def fake_list(template_type=None):
+        assert template_type == PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION
+        return [active]
+
+    monkeypatch.setattr(repository, "list", fake_list)
+
+    created = await repository.create(
+        PromptTemplateCreate(
+            name="Profile v2",
+            type=PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION,
+            version=2,
+            content="new",
+            is_active=True,
+            metadata={},
+        )
+    )
+
+    assert active.is_active is False
+    assert created.is_active is True
 
 
 @pytest.mark.asyncio

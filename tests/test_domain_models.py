@@ -29,6 +29,15 @@ def test_domain_metadata_contains_task_two_tables_and_indexes() -> None:
     assert "ix_prompt_templates_type_active" in {
         index.name for index in prompt_templates.indexes
     }
+    one_active_index = next(
+        index
+        for index in prompt_templates.indexes
+        if index.name == "ix_prompt_templates_one_active_per_type"
+    )
+    assert one_active_index.unique is True
+    assert str(one_active_index.dialect_options["postgresql"]["where"]) == (
+        "prompt_templates.is_active IS true"
+    )
     assert "ix_generations_status" in {index.name for index in generations.indexes}
     assert "ix_generation_runs_generation_id" in {
         index.name for index in generation_runs.indexes

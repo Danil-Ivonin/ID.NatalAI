@@ -16,6 +16,11 @@ class PromptTemplateRepository:
         self.session = session
 
     async def create(self, data: PromptTemplateCreate) -> PromptTemplate:
+        if data.is_active:
+            templates = await self.list(data.type)
+            for template in templates:
+                template.is_active = False
+
         template = PromptTemplate(**data.model_dump())
         self.session.add(template)
         await self.session.flush()
