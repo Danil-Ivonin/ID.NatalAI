@@ -38,6 +38,36 @@ class FakeSession:
         return self.get_result
 
 
+class FakeScalarResult:
+    def __init__(self, values) -> None:
+        self.values = values
+
+    def all(self):
+        return self.values
+
+
+class FakeExecuteResult:
+    def __init__(self, scalar=None, scalars=None) -> None:
+        self.scalar = scalar
+        self.scalars_values = scalars
+
+    def scalar_one_or_none(self):
+        return self.scalar
+
+    def scalars(self):
+        return FakeScalarResult(self.scalars_values)
+
+
+class FakeExecuteSession:
+    def __init__(self, results) -> None:
+        self.results = list(results)
+        self.executed = []
+
+    async def execute(self, statement):
+        self.executed.append(statement)
+        return self.results.pop(0)
+
+
 def test_repository_methods_are_async_contracts() -> None:
     from app.repositories.generation_repository import GenerationRepository
     from app.repositories.persona_repository import PersonaRepository
@@ -188,6 +218,79 @@ async def test_persona_create_builds_nested_context_data() -> None:
     ]
     assert persona.phrase_templates[0].template == "{subject}, listen."
     assert persona.style_examples[0].tags == ["advice"]
+
+
+@pytest.mark.asyncio
+async def test_persona_context_loading_methods_execute_queries_and_return_results() -> None:
+    from app.domain.persona.models import (
+        Persona,
+        PersonaPhraseTemplate,
+        PersonaQuote,
+        PersonaStyleExample,
+        PersonaStyleProfile,
+    )
+    from app.repositories.persona_repository import PersonaRepository
+
+    persona_id = uuid4()
+    persona = Persona(
+        id=persona_id,
+        name="Shrek",
+        slug="shrek",
+        description="Direct swamp wisdom.",
+        is_active=True,
+    )
+    style_profile = PersonaStyleProfile(
+        persona_id=persona_id,
+        voice_description="Blunt.",
+        humor_style="Dry.",
+        speech_patterns=["short"],
+        forbidden_rules=["no hate"],
+        allowed_rules=["tease lightly"],
+    )
+    allowed_quote = PersonaQuote(
+        persona_id=persona_id,
+        text="Better out than in.",
+        usage_context="general",
+        is_allowed=True,
+    )
+    phrase_template = PersonaPhraseTemplate(
+        persona_id=persona_id,
+        type="intro",
+        template="{subject}, listen.",
+        usage="openings",
+    )
+    style_example = PersonaStyleExample(
+        persona_id=persona_id,
+        title="Advice",
+        text="That plan needs boots.",
+        tags=["advice"],
+    )
+    session = FakeExecuteSession(
+        [
+            FakeExecuteResult(scalar=persona),
+            FakeExecuteResult(scalar=style_profile),
+            FakeExecuteResult(scalars=[allowed_quote]),
+            FakeExecuteResult(scalars=[phrase_template]),
+            FakeExecuteResult(scalars=[style_example]),
+        ]
+    )
+    repository = PersonaRepository(session)
+
+    assert await repository.get_context_persona(persona_id) is persona
+    assert await repository.get_style_profile(persona_id) is style_profile
+    assert await repository.list_allowed_quotes(persona_id) == [allowed_quote]
+    assert await repository.list_phrase_templates(persona_id) == [phrase_template]
+    assert await repository.list_style_examples(persona_id) == [style_example]
+
+    assert len(session.executed) == 5
+    compiled_queries = [str(statement) for statement in session.executed]
+    assert "FROM personas" in compiled_queries[0]
+    assert "personas.is_active IS true" in compiled_queries[0]
+    assert "FROM persona_style_profiles" in compiled_queries[1]
+    assert "FROM persona_quotes" in compiled_queries[2]
+    assert "persona_quotes.is_allowed IS true" in compiled_queries[2]
+    assert "FROM persona_phrase_templates" in compiled_queries[3]
+    assert "FROM persona_style_examples" in compiled_queries[4]
 
 
 @pytest.mark.asyncio
