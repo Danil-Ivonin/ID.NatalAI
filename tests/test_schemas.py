@@ -13,6 +13,8 @@ from app.domain.generation.schemas import (
 )
 from app.domain.generation.ai_schemas import AstrologyProfile, StyledNatalReport
 from app.domain.persona.context import PersonaContext, PersonaContextProvider
+from app.domain.prompts.enums import PromptTemplateType
+from app.domain.prompts.schemas import PromptTemplateActivateResponse
 
 
 def test_generation_create_accepts_missing_person_name_and_null_gender() -> None:
@@ -34,6 +36,26 @@ def test_generation_create_accepts_missing_person_name_and_null_gender() -> None
     assert model.person_name is None
     assert model.gender is None
     assert model.birth_place.city == "Moscow"
+
+
+def test_generation_create_accepts_explicit_null_person_name_and_gender() -> None:
+    model = GenerationCreate(
+        person_name=None,
+        gender=None,
+        birth_date=date(1990, 1, 2),
+        birth_time=time(3, 4),
+        birth_place=BirthPlace(
+            city="Moscow",
+            country="Russia",
+            lat=55.7558,
+            lng=37.6173,
+            timezone="Europe/Moscow",
+        ),
+        persona_id=uuid4(),
+    )
+
+    assert model.person_name is None
+    assert model.gender is None
 
 
 @pytest.mark.parametrize("gender", ["other", "unknown"])
@@ -249,3 +271,34 @@ def test_persona_context_schema_and_provider_protocol_shape() -> None:
 
     with pytest.raises(ValidationError):
         PersonaContext.model_validate(context.model_dump() | {"extra": "nope"})
+
+
+def test_prompt_template_activate_response_exposes_read_fields_and_metadata_alias() -> None:
+    prompt_template_id = uuid4()
+    created_at = datetime(2026, 5, 15, tzinfo=timezone.utc)
+    updated_at = datetime(2026, 5, 16, tzinfo=timezone.utc)
+    source = type(
+        "PromptTemplateLike",
+        (),
+        {
+            "id": prompt_template_id,
+            "name": "Astrology profile v1",
+            "type": PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION,
+            "version": 1,
+            "content": "Extract profile",
+            "is_active": True,
+            "template_metadata": {"model": "test-model"},
+            "created_at": created_at,
+            "updated_at": updated_at,
+        },
+    )()
+
+    response = PromptTemplateActivateResponse.model_validate(source)
+
+    assert response.prompt_template_id == prompt_template_id
+    assert response.name == "Astrology profile v1"
+    assert response.content == "Extract profile"
+    assert response.template_metadata == {"model": "test-model"}
+    assert response.created_at == created_at
+    assert response.updated_at == updated_at
+    assert response.model_dump(by_alias=True)["metadata"] == {"model": "test-model"}

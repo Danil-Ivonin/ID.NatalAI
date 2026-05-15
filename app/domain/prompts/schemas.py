@@ -34,13 +34,12 @@ class PromptTemplateRead(PromptTemplateBase):
     updated_at: datetime
 
 
-class PromptTemplateActivateResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class PromptTemplateActivateResponse(PromptTemplateBase):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     prompt_template_id: UUID = Field(
         validation_alias=AliasChoices("prompt_template_id", "id"),
         serialization_alias="prompt_template_id",
     )
-    type: PromptTemplateType
-    version: int
-    is_active: bool
+    created_at: datetime
+    updated_at: datetime
