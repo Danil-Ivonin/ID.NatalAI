@@ -252,9 +252,9 @@ chart_subject_name = person_name or "Anonymous"
 
 The API supports only `male` and `female` for `gender`, and the field remains optional and nullable.
 
-For this entertainment product, gender may be used in the final styled-report stage for grammar and comedic stereotypical framing. The final report may be sharp, sarcastic, rude, and use profanity if the selected persona style allows it. Gender framing must remain part of the comedic voice and must not override astrology-profile facts. The first AI stage should not infer core chart psychology from gender alone; astrology data remains the source of the structured profile.
+For this entertainment product, gender may be used in the final styled-report stage for grammar and comedic stereotypical framing. The final report should support the harshest allowed roast mode: profanity, aggressive sarcasm, toxic character voice, dark humor, rude jokes, and sharp comedic stereotypes when the selected persona style allows it. Gender framing may be intentionally rough and stereotypical as part of the comedic voice, but it must not override astrology-profile facts. The first AI stage should not infer core chart psychology from gender alone; astrology data remains the source of the structured profile.
 
-The product may support roast-style output, dark humor, harsh jokes, and explicit language. It should not generate dehumanizing attacks or discriminatory hate against protected groups. The target of the joke is the user's chart/persona interpretation, not a protected identity group.
+The product supports maximum-intensity roast-style output within safety boundaries: profanity, harsh jokes, insulting comedic phrasing, and explicit language are allowed. The hard stop is dehumanizing attacks, discriminatory hate against protected groups, or encouragement of real-world violence. The target of the joke is the user's chart/persona interpretation, behavior patterns, contradictions, and comedic archetype, not a protected identity group.
 
 ## Person Name Handling
 
@@ -301,7 +301,7 @@ build_styled_report_prompt(
 
 The first prompt asks AI to analyze natal XML and return strict JSON matching `AstrologyProfile`.
 
-The second prompt uses only `astrology_profile_json` as the factual source and `PersonaContext` as the style source. It may use allowed quotes, phrase templates, style examples, profanity, harsh roast phrasing, and comedic stereotypes if allowed by persona rules, but must not copy long protected fragments or claim to be a real person.
+The second prompt uses only `astrology_profile_json` as the factual source and `PersonaContext` as the style source. It may use allowed quotes, phrase templates, style examples, profanity, maximum-intensity roast phrasing, insulting comedic comparisons, dark humor, and comedic stereotypes if allowed by persona rules, but must not copy long protected fragments or claim to be a real person.
 
 ## AI Structured Output
 
