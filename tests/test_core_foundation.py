@@ -3,7 +3,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.database import async_session
+from app.core.database import async_session_factory
 from app.core.exceptions import NatalAIError, NotFoundError
 from app.core.logging import configure_logging
 
@@ -17,7 +17,7 @@ def test_settings_defaults_are_test_friendly() -> None:
 
 
 def test_database_sessionmaker_creates_async_sessions() -> None:
-    session = async_session()
+    session = async_session_factory()
 
     assert isinstance(session, AsyncSession)
 
