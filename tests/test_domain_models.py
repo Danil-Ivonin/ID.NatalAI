@@ -33,7 +33,7 @@ def test_domain_metadata_contains_task_two_tables_and_indexes() -> None:
         index.name for index in generation_runs.indexes
     }
     assert isinstance(
-        prompt_templates.c.template_metadata.type.dialect_impl(postgresql.dialect()),
+        prompt_templates.c.metadata.type.dialect_impl(postgresql.dialect()),
         postgresql.JSONB,
     )
 

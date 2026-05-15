@@ -25,7 +25,9 @@ class PromptTemplate(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    template_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    template_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSONB, nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

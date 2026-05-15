@@ -49,7 +49,7 @@ def upgrade() -> None:
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False),
-        sa.Column("template_metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
