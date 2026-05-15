@@ -163,6 +163,7 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["persona_id"], ["personas.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("persona_id", name="uq_persona_style_profiles_persona_id"),
     )
 
     op.create_table(

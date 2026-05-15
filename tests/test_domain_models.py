@@ -1,12 +1,12 @@
+from sqlalchemy import UniqueConstraint
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.orm import configure_mappers
 
 from app.core.database import Base
 
 
 def test_domain_metadata_contains_task_two_tables_and_indexes() -> None:
-    import app.domain.generation.models  # noqa: F401
-    import app.domain.persona.models  # noqa: F401
-    import app.domain.prompts.models  # noqa: F401
+    import app.db.models  # noqa: F401
 
     assert sorted(Base.metadata.tables) == [
         "generation_runs",
@@ -23,6 +23,7 @@ def test_domain_metadata_contains_task_two_tables_and_indexes() -> None:
     prompt_templates = Base.metadata.tables["prompt_templates"]
     generations = Base.metadata.tables["generations"]
     generation_runs = Base.metadata.tables["generation_runs"]
+    persona_style_profiles = Base.metadata.tables["persona_style_profiles"]
 
     assert "ix_personas_slug" in {index.name for index in personas.indexes}
     assert "ix_prompt_templates_type_active" in {
@@ -36,6 +37,26 @@ def test_domain_metadata_contains_task_two_tables_and_indexes() -> None:
         prompt_templates.c.metadata.type.dialect_impl(postgresql.dialect()),
         postgresql.JSONB,
     )
+    assert "uq_persona_style_profiles_persona_id" in {
+        constraint.name
+        for constraint in persona_style_profiles.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+
+
+def test_model_registry_import_configures_relationship_mappers() -> None:
+    from app.db.models import Generation, Persona, PromptTemplate
+
+    configure_mappers()
+
+    assert Persona(name="Shrek", slug="shrek").slug == "shrek"
+    assert PromptTemplate(
+        name="Report",
+        type="styled_report_generation",
+        version=1,
+        content="x",
+    )
+    assert Generation.__tablename__ == "generations"
 
 
 def test_domain_enums_expose_expected_values() -> None:
