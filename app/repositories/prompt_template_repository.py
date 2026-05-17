@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.db.models  # noqa: F401
@@ -17,9 +17,8 @@ class PromptTemplateRepository:
 
     async def create(self, data: PromptTemplateCreate) -> PromptTemplate:
         if data.is_active:
-            templates = await self.list(data.type)
-            for template in templates:
-                template.is_active = False
+            await self._deactivate_active_templates(data.type)
+            await self.session.flush()
 
         template = PromptTemplate(**data.model_dump())
         self.session.add(template)
@@ -56,10 +55,26 @@ class PromptTemplateRepository:
         if target is None:
             return None
 
-        templates = await self.list(target.type)
-        for template in templates:
-            template.is_active = template.id == target.id
-
+        await self._deactivate_active_templates(target.type, exclude_id=target.id)
+        await self.session.flush()
+        target.is_active = True
         await self.session.flush()
         await self.session.refresh(target)
         return target
+
+    async def _deactivate_active_templates(
+        self,
+        template_type: PromptTemplateType,
+        exclude_id: UUID | None = None,
+    ) -> None:
+        statement = (
+            update(PromptTemplate)
+            .where(
+                PromptTemplate.type == template_type,
+                PromptTemplate.is_active.is_(True),
+            )
+            .values(is_active=False)
+        )
+        if exclude_id is not None:
+            statement = statement.where(PromptTemplate.id != exclude_id)
+        await self.session.execute(statement)

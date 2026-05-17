@@ -73,6 +73,30 @@ class FakeExecuteSession:
         return self.results.pop(0)
 
 
+class FakePromptWriteSession(FakeSession):
+    def __init__(self, get_result=None) -> None:
+        super().__init__(get_result=get_result)
+        self.operations = []
+        self.executed = []
+
+    def add(self, instance) -> None:
+        super().add(instance)
+        self.operations.append(("add", instance))
+
+    async def execute(self, statement):
+        self.executed.append(statement)
+        self.operations.append(("execute", statement))
+        return FakeExecuteResult(scalars=[])
+
+    async def flush(self) -> None:
+        await super().flush()
+        self.operations.append(("flush", None))
+
+    async def refresh(self, instance) -> None:
+        await super().refresh(instance)
+        self.operations.append(("refresh", instance))
+
+
 def test_repository_methods_are_async_contracts() -> None:
     from app.repositories.generation_repository import GenerationRepository
     from app.repositories.persona_repository import PersonaRepository
@@ -326,17 +350,11 @@ async def test_persona_get_and_list_eager_load_all_read_relationships() -> None:
 
 
 @pytest.mark.asyncio
-async def test_prompt_template_create_uses_metadata_alias(monkeypatch) -> None:
+async def test_prompt_template_create_uses_metadata_alias() -> None:
     from app.repositories.prompt_template_repository import PromptTemplateRepository
 
-    session = FakeSession()
+    session = FakePromptWriteSession()
     repository = PromptTemplateRepository(session)
-
-    async def fake_list(template_type=None):
-        assert template_type == PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION
-        return []
-
-    monkeypatch.setattr(repository, "list", fake_list)
 
     template = await repository.create(
         PromptTemplateCreate(
@@ -354,25 +372,11 @@ async def test_prompt_template_create_uses_metadata_alias(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_prompt_template_create_active_deactivates_existing_same_type(monkeypatch) -> None:
+async def test_prompt_template_create_active_bulk_deactivates_before_insert() -> None:
     from app.repositories.prompt_template_repository import PromptTemplateRepository
 
-    active = PromptTemplate(
-        id=uuid4(),
-        name="Profile v1",
-        type=PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION,
-        version=1,
-        content="old",
-        is_active=True,
-        template_metadata={},
-    )
-    repository = PromptTemplateRepository(FakeSession())
-
-    async def fake_list(template_type=None):
-        assert template_type == PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION
-        return [active]
-
-    monkeypatch.setattr(repository, "list", fake_list)
+    session = FakePromptWriteSession()
+    repository = PromptTemplateRepository(session)
 
     created = await repository.create(
         PromptTemplateCreate(
@@ -385,23 +389,27 @@ async def test_prompt_template_create_active_deactivates_existing_same_type(monk
         )
     )
 
-    assert active.is_active is False
     assert created.is_active is True
+    assert [operation for operation, _ in session.operations] == [
+        "execute",
+        "flush",
+        "add",
+        "flush",
+        "refresh",
+    ]
+    deactivation_statement = session.executed[0]
+    assert deactivation_statement.is_update
+    compiled = str(deactivation_statement.compile(compile_kwargs={"literal_binds": True}))
+    assert compiled.startswith("UPDATE prompt_templates")
+    assert "is_active=false" in compiled
 
 
 @pytest.mark.asyncio
-async def test_prompt_activate_deactivates_existing_templates(monkeypatch) -> None:
+async def test_prompt_activate_bulk_deactivates_and_flushes_before_target_activation(
+    monkeypatch,
+) -> None:
     from app.repositories.prompt_template_repository import PromptTemplateRepository
 
-    active = PromptTemplate(
-        id=uuid4(),
-        name="Profile v1",
-        type=PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION,
-        version=1,
-        content="old",
-        is_active=True,
-        template_metadata={},
-    )
     target = PromptTemplate(
         id=uuid4(),
         name="Profile v2",
@@ -411,20 +419,27 @@ async def test_prompt_activate_deactivates_existing_templates(monkeypatch) -> No
         is_active=False,
         template_metadata={},
     )
-    repository = PromptTemplateRepository(FakeSession())
+    session = FakePromptWriteSession()
+    repository = PromptTemplateRepository(session)
 
     async def fake_get(template_id):
         return target if template_id == target.id else None
 
-    async def fake_list(template_type=None):
-        assert template_type == PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION
-        return [active, target]
-
     monkeypatch.setattr(repository, "get", fake_get)
-    monkeypatch.setattr(repository, "list", fake_list)
 
     activated = await repository.activate(target.id)
 
     assert activated is target
-    assert active.is_active is False
     assert target.is_active is True
+    assert [operation for operation, _ in session.operations] == [
+        "execute",
+        "flush",
+        "flush",
+        "refresh",
+    ]
+    deactivation_statement = session.executed[0]
+    assert deactivation_statement.is_update
+    compiled = str(deactivation_statement.compile(compile_kwargs={"literal_binds": True}))
+    assert compiled.startswith("UPDATE prompt_templates")
+    assert "is_active=false" in compiled
+    assert "prompt_templates.id !=" in compiled
