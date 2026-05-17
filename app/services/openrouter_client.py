@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 import logging
 from time import perf_counter
@@ -12,6 +13,8 @@ from app.core.config import Settings, get_settings
 from app.core.exceptions import OpenRouterTemporaryError, ValidationFailure
 
 logger = logging.getLogger(__name__)
+TRANSIENT_HTTP_STATUSES = {408, 429}
+MAX_RETRY_AFTER_SECONDS = 5.0
 
 
 @dataclass(frozen=True)
@@ -100,7 +103,21 @@ class OpenRouterClient:
                     },
                 )
 
-                if response.status_code >= 500:
+                if (
+                    response.status_code in TRANSIENT_HTTP_STATUSES
+                    or response.status_code >= 500
+                ):
+                    retry_after = self._retry_after_seconds(response)
+                    if retry_after is not None:
+                        logger.info(
+                            "openrouter retry-after received",
+                            extra={
+                                "model": model,
+                                "status_code": response.status_code,
+                                "retry_after_seconds": retry_after,
+                            },
+                        )
+                        await asyncio.sleep(retry_after)
                     raise OpenRouterTemporaryError(
                         f"OpenRouter returned {response.status_code}"
                     )
@@ -131,3 +148,16 @@ class OpenRouterClient:
             output_tokens=usage.get("completion_tokens"),
             latency_ms=latency_ms,
         )
+
+    @staticmethod
+    def _retry_after_seconds(response: httpx.Response) -> float | None:
+        value = response.headers.get("Retry-After")
+        if value is None:
+            return None
+        try:
+            seconds = float(value)
+        except ValueError:
+            return None
+        if seconds <= 0:
+            return None
+        return min(seconds, MAX_RETRY_AFTER_SECONDS)

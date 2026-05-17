@@ -281,6 +281,87 @@ async def test_openrouter_client_raises_temporary_error_after_retried_5xx() -> N
 
 
 @pytest.mark.asyncio
+async def test_openrouter_client_retries_429_and_returns_successful_response() -> None:
+    from app.services.openrouter_client import OpenRouterClient
+
+    with respx.mock(assert_all_called=True) as router:
+        route = router.post("https://openrouter.test/api/v1/chat/completions").mock(
+            side_effect=[
+                Response(429, headers={"Retry-After": "0"}, json={"error": "rate"}),
+                Response(
+                    200,
+                    json={
+                        "choices": [{"message": {"content": "{\"ok\": true}"}}],
+                        "usage": {"prompt_tokens": 13, "completion_tokens": 17},
+                    },
+                ),
+            ]
+        )
+
+        async with OpenRouterClient(settings=FakeSettings()) as client:
+            result = await client.chat_completion(
+                model="test-model",
+                messages=[{"role": "user", "content": "hello"}],
+            )
+
+    assert len(route.calls) == 2
+    assert result.input_tokens == 13
+    assert result.output_tokens == 17
+
+
+@pytest.mark.asyncio
+async def test_openrouter_client_retries_408_and_returns_successful_response() -> None:
+    from app.services.openrouter_client import OpenRouterClient
+
+    with respx.mock(assert_all_called=True) as router:
+        route = router.post("https://openrouter.test/api/v1/chat/completions").mock(
+            side_effect=[
+                Response(408, json={"error": "timeout"}),
+                Response(
+                    200,
+                    json={
+                        "choices": [{"message": {"content": "{\"ok\": true}"}}],
+                        "usage": {"prompt_tokens": 19, "completion_tokens": 23},
+                    },
+                ),
+            ]
+        )
+
+        async with OpenRouterClient(settings=FakeSettings()) as client:
+            result = await client.chat_completion(
+                model="test-model",
+                messages=[{"role": "user", "content": "hello"}],
+            )
+
+    assert len(route.calls) == 2
+    assert result.input_tokens == 19
+    assert result.output_tokens == 23
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [400, 401, 403])
+async def test_openrouter_client_does_not_retry_permanent_client_errors(
+    status_code: int,
+) -> None:
+    from app.core.exceptions import ValidationFailure
+    from app.services.openrouter_client import OpenRouterClient
+
+    with respx.mock(assert_all_called=True) as router:
+        route = router.post("https://openrouter.test/api/v1/chat/completions").mock(
+            return_value=Response(status_code, json={"error": "permanent"})
+        )
+
+        async with OpenRouterClient(settings=FakeSettings()) as client:
+            with pytest.raises(ValidationFailure):
+                await client.chat_completion(
+                    model="test-model",
+                    messages=[{"role": "user", "content": "hello"}],
+                )
+
+    assert len(route.calls) == 1
+
+
+@pytest.mark.asyncio
 async def test_ai_generation_service_marks_generation_failed_when_openrouter_errors() -> None:
     from app.core.exceptions import OpenRouterTemporaryError
     from app.services.ai_generation_service import AIGenerationService
