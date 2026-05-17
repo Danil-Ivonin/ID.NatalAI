@@ -16,13 +16,13 @@ router = APIRouter(prefix="/generations", tags=["generations"])
 
 
 def dispatch_generation_job(generation_id: UUID) -> None:
-    """Task 8 will wire this to Celery; until then it is a monkeypatchable seam."""
+    """Dispatch background generation while keeping tests monkeypatchable."""
     try:
-        from app.worker.tasks import generate_report_task
+        from app.workers.tasks import generate_natal_report_task
     except ModuleNotFoundError:
         return
 
-    generate_report_task.delay(str(generation_id))
+    generate_natal_report_task.delay(str(generation_id))
 
 
 @router.post(
