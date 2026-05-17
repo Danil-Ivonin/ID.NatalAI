@@ -25,6 +25,7 @@ class PromptBuilder:
                 "Return strict JSON matching the AstrologyProfile schema.",
                 "Every interpretation must include evidence from the natal chart data.",
                 "do not invent chart data, placements, aspects, houses, or facts not present in natal_xml; do not contradict the chart.",
+                *self._anonymous_profile_rules(person_name),
                 "Use no markdown and no text outside JSON.",
             ]
         )
@@ -64,7 +65,10 @@ class PromptBuilder:
                 f"Гендер: {gender or 'не указан'}",
                 "",
                 "AstrologyProfile JSON:",
-                self._serialize_json(astrology_profile_json),
+                self._serialize_json(
+                    astrology_profile_json,
+                    sanitize_anonymous=person_name is None,
+                ),
                 "",
                 "PersonaContext JSON:",
                 self._serialize_json(persona_context),
@@ -78,12 +82,41 @@ class PromptBuilder:
         ]
 
     @staticmethod
-    def _serialize_json(value: Any) -> str:
+    def _anonymous_profile_rules(person_name: str | None) -> list[str]:
+        if person_name:
+            return []
+        return [
+            "If XML/chart data contains name `Anonymous`, treat it only as technical kerykeion fallback.",
+            "Do not use it as real user name.",
+            "Return AstrologyProfile.subject.person_name as null.",
+        ]
+
+    @classmethod
+    def _serialize_json(cls, value: Any, sanitize_anonymous: bool = False) -> str:
         if isinstance(value, str):
-            return value
+            if sanitize_anonymous:
+                try:
+                    value = json.loads(value)
+                except json.JSONDecodeError:
+                    return value.replace("Anonymous", "null")
+            else:
+                return value
         if isinstance(value, BaseModel):
             value = value.model_dump(mode="json")
         elif is_dataclass(value):
             value = asdict(value)
 
+        if sanitize_anonymous:
+            value = cls._sanitize_anonymous(value)
+
         return json.dumps(value, ensure_ascii=False, indent=2)
+
+    @classmethod
+    def _sanitize_anonymous(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: cls._sanitize_anonymous(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [cls._sanitize_anonymous(item) for item in value]
+        if value == "Anonymous":
+            return None
+        return value

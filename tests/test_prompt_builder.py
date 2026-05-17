@@ -50,6 +50,8 @@ def test_build_astrology_profile_prompt_renders_missing_subject_fields() -> None
 
     assert "Имя: не указано" in user_prompt
     assert "Гендер: не указан" in user_prompt
+    assert "technical kerykeion fallback" in user_prompt
+    assert "Return AstrologyProfile.subject.person_name as null" in user_prompt
 
 
 def test_build_styled_report_prompt_includes_inputs_schema_and_safety_rules() -> None:
@@ -90,3 +92,22 @@ def test_build_styled_report_prompt_suppresses_anonymous_as_user_name_when_missi
     assert "Имя: не указано" in user_prompt
     assert "Гендер: не указан" in user_prompt
     assert "Anonymous" not in user_prompt
+
+
+def test_build_styled_report_prompt_sanitizes_anonymous_profile_name_when_name_missing() -> None:
+    astrology_profile = {"subject": {"person_name": "Anonymous", "name": "Anonymous"}}
+
+    user_prompt = PromptBuilder().build_styled_report_prompt(
+        astrology_profile_json=astrology_profile,
+        persona_context=_persona_context(),
+        person_name=None,
+        gender=None,
+        template_content="STYLE SYSTEM TEMPLATE",
+    )[1]["content"]
+
+    assert "Anonymous" not in user_prompt
+    assert '"person_name": null' in user_prompt
+    assert '"name": null' in user_prompt
+    assert astrology_profile == {
+        "subject": {"person_name": "Anonymous", "name": "Anonymous"}
+    }
