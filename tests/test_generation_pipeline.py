@@ -157,10 +157,14 @@ def _report_payload() -> dict:
 
 @dataclass
 class FakeSettings:
-    openrouter_api_key: str = "secret-key"
+    openrouter_api_key: str = "sk-secret-test"
     openrouter_base_url: str = "https://openrouter.test/api/v1"
     openrouter_model_profile: str = "profile-model"
     openrouter_model_report: str = "report-model"
+
+
+def _stringify(value) -> str:
+    return json.dumps(value, default=str, ensure_ascii=False, sort_keys=True)
 
 
 @pytest.mark.asyncio
@@ -215,12 +219,65 @@ async def test_openrouter_client_excludes_api_key_from_result_and_sends_bearer_h
             )
 
     request = route.calls[0].request
-    assert request.headers["Authorization"] == "Bearer secret-key"
+    assert request.headers["Authorization"] == "Bearer sk-secret-test"
     assert result.content == "{\"ok\": true}"
     assert result.input_tokens == 3
     assert result.output_tokens == 5
-    assert "secret-key" not in json.dumps(result.raw_response)
+    assert "sk-secret-test" not in _stringify(result.raw_response)
     assert not hasattr(result, "raw_request")
+
+
+@pytest.mark.asyncio
+async def test_openrouter_client_retries_5xx_and_returns_successful_response() -> None:
+    from app.services.openrouter_client import OpenRouterClient
+
+    with respx.mock(assert_all_called=True) as router:
+        route = router.post("https://openrouter.test/api/v1/chat/completions").mock(
+            side_effect=[
+                Response(500, json={"error": "temporary"}),
+                Response(502, json={"error": "temporary"}),
+                Response(
+                    200,
+                    json={
+                        "choices": [{"message": {"content": "{\"ok\": true}"}}],
+                        "usage": {"prompt_tokens": 7, "completion_tokens": 11},
+                    },
+                ),
+            ]
+        )
+
+        async with OpenRouterClient(settings=FakeSettings()) as client:
+            result = await client.chat_completion(
+                model="test-model",
+                messages=[{"role": "user", "content": "hello"}],
+            )
+
+    assert len(route.calls) == 3
+    assert result.content == "{\"ok\": true}"
+    assert result.input_tokens == 7
+    assert result.output_tokens == 11
+    assert not hasattr(result, "raw_request")
+    assert "sk-secret-test" not in _stringify(result.raw_response)
+
+
+@pytest.mark.asyncio
+async def test_openrouter_client_raises_temporary_error_after_retried_5xx() -> None:
+    from app.core.exceptions import OpenRouterTemporaryError
+    from app.services.openrouter_client import OpenRouterClient
+
+    with respx.mock(assert_all_called=True) as router:
+        route = router.post("https://openrouter.test/api/v1/chat/completions").mock(
+            return_value=Response(503, json={"error": "temporary"})
+        )
+
+        async with OpenRouterClient(settings=FakeSettings()) as client:
+            with pytest.raises(OpenRouterTemporaryError):
+                await client.chat_completion(
+                    model="test-model",
+                    messages=[{"role": "user", "content": "hello"}],
+                )
+
+    assert len(route.calls) == 3
 
 
 @pytest.mark.asyncio
@@ -257,6 +314,7 @@ async def test_ai_generation_service_successful_orchestration_records_outputs_an
     generation = FakeGeneration()
     generation_repository = FakeGenerationRepository(generation)
     openrouter_client = SuccessfulOpenRouterClient()
+    settings = FakeSettings(openrouter_api_key="sk-secret-test")
 
     await AIGenerationService(
         generation_repository=generation_repository,
@@ -265,7 +323,7 @@ async def test_ai_generation_service_successful_orchestration_records_outputs_an
         prompt_builder=FakePromptBuilder(),
         persona_context_provider=FakeContextProvider(),
         openrouter_client=openrouter_client,
-        settings=FakeSettings(),
+        settings=settings,
     ).generate(generation.id)
 
     assert generation_repository.statuses == [GenerationStatus.PROCESSING]
@@ -296,6 +354,12 @@ async def test_ai_generation_service_successful_orchestration_records_outputs_an
     assert openrouter_client.calls[1]["response_format"]["json_schema"]["name"] == (
         "StyledNatalReport"
     )
+    assert "sk-secret-test" not in _stringify(generation_repository.runs)
+    assert "sk-secret-test" not in _stringify(generation_repository.result[1])
+    assert "sk-secret-test" not in generation_repository.result[2]
+    for call in openrouter_client.results:
+        assert not hasattr(call, "raw_request")
+        assert "sk-secret-test" not in _stringify(call.raw_response)
 
 
 class FakePersonaRepository:
@@ -452,6 +516,7 @@ class FakeOpenRouterResult:
 class SuccessfulOpenRouterClient:
     def __init__(self) -> None:
         self.calls = []
+        self.results = []
 
     async def chat_completion(self, model, messages, response_format=None):
         self.calls.append(
@@ -462,8 +527,11 @@ class SuccessfulOpenRouterClient:
             }
         )
         if model == "profile-model":
-            return FakeOpenRouterResult(json.dumps(_profile_payload()), model)
-        return FakeOpenRouterResult(json.dumps(_report_payload()), model)
+            result = FakeOpenRouterResult(json.dumps(_profile_payload()), model)
+        else:
+            result = FakeOpenRouterResult(json.dumps(_report_payload()), model)
+        self.results.append(result)
+        return result
 
 
 class FailingOpenRouterClient:
