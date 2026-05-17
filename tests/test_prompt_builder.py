@@ -34,6 +34,8 @@ def test_build_astrology_profile_prompt_includes_subject_chart_and_json_rules() 
     assert "<chart>data</chart>" in user_prompt
     assert "strict JSON" in user_prompt
     assert "evidence" in user_prompt
+    assert "do not invent chart data, placements, aspects, houses, or facts" in user_prompt
+    assert "do not contradict the chart" in user_prompt
     assert "no markdown" in user_prompt
     assert "outside JSON" in user_prompt
 

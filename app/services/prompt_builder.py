@@ -24,6 +24,7 @@ class PromptBuilder:
                 "",
                 "Return strict JSON matching the AstrologyProfile schema.",
                 "Every interpretation must include evidence from the natal chart data.",
+                "do not invent chart data, placements, aspects, houses, or facts not present in natal_xml; do not contradict the chart.",
                 "Use no markdown and no text outside JSON.",
             ]
         )
