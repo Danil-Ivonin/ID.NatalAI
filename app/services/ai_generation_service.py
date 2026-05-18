@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import UUID
 
@@ -34,6 +35,8 @@ class AIGenerationService:
         persona_context_provider: PersonaContextProvider,
         openrouter_client: OpenRouterClient,
         settings: Settings | None = None,
+        commit: Callable[[], Awaitable[None]] | None = None,
+        rollback: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self.generation_repository = generation_repository
         self.prompt_template_repository = prompt_template_repository
@@ -42,6 +45,8 @@ class AIGenerationService:
         self.persona_context_provider = persona_context_provider
         self.openrouter_client = openrouter_client
         self.settings = settings or get_settings()
+        self._commit = commit
+        self._rollback = rollback
 
     async def generate(self, generation_id: UUID) -> None:
         generation = await self.generation_repository.get(generation_id)
@@ -58,6 +63,7 @@ class AIGenerationService:
             await self.generation_repository.set_status(
                 generation_id, GenerationStatus.PROCESSING
             )
+            await self._commit_progress()
 
             stage = GenerationStage.NATAL_CHART_BUILD
             chart = self.natal_chart_service.build_natal_chart(
@@ -82,6 +88,7 @@ class AIGenerationService:
                 raw_response={"natal_xml_saved": True},
                 result=None,
             )
+            await self._commit_progress()
 
             stage = GenerationStage.ASTROLOGY_PROFILE_EXTRACTION
             model = self.settings.openrouter_model_profile
@@ -115,6 +122,7 @@ class AIGenerationService:
                 raw_response=profile_result.raw_response,
                 result=profile_result,
             )
+            await self._commit_progress()
 
             stage = GenerationStage.STYLED_REPORT_GENERATION
             model = self.settings.openrouter_model_report
@@ -156,8 +164,10 @@ class AIGenerationService:
                 raw_response=report_result.raw_response,
                 result=report_result,
             )
+            await self._commit_progress()
         except Exception as exc:
             error_message = str(exc)
+            await self._rollback_progress()
             await self.generation_repository.fail(generation_id, error_message)
             if stage is not None:
                 await self._create_error_run(
@@ -171,6 +181,7 @@ class AIGenerationService:
                     else None,
                     error_message=error_message,
                 )
+            await self._commit_progress()
             logger.exception(
                 "generation failed",
                 extra={
@@ -181,6 +192,14 @@ class AIGenerationService:
                 },
             )
             raise
+
+    async def _commit_progress(self) -> None:
+        if self._commit is not None:
+            await self._commit()
+
+    async def _rollback_progress(self) -> None:
+        if self._rollback is not None:
+            await self._rollback()
 
     async def _active_template(self, template_type: PromptTemplateType):
         template = await self.prompt_template_repository.get_active(template_type)

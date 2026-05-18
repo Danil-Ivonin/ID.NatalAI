@@ -33,6 +33,7 @@ class OpenRouterClient:
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self.settings = settings or get_settings()
+        self.settings.require_openrouter_api_key()
         self._owns_client = http_client is None
         self._client = http_client or httpx.AsyncClient(
             base_url=self.settings.openrouter_base_url.rstrip("/"),

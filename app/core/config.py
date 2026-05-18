@@ -3,6 +3,8 @@ from functools import lru_cache
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.exceptions import ValidationFailure
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -39,6 +41,10 @@ class Settings(BaseSettings):
         alias="OPENROUTER_MODEL_REPORT",
     )
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+
+    def require_openrouter_api_key(self) -> None:
+        if not self.openrouter_api_key.strip():
+            raise ValidationFailure("OPENROUTER_API_KEY is required for AI generation")
 
 
 @lru_cache

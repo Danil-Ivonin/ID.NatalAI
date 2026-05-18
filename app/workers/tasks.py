@@ -38,14 +38,8 @@ async def _run_generation(generation_id: str) -> None:
                 ),
                 openrouter_client=openrouter_client,
                 settings=settings,
+                commit=session.commit,
+                rollback=session.rollback,
             )
 
-            try:
-                await service.generate(UUID(generation_id))
-                await session.commit()
-            except Exception:
-                try:
-                    await session.commit()
-                except Exception:
-                    await session.rollback()
-                raise
+            await service.generate(UUID(generation_id))

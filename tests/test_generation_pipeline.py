@@ -162,6 +162,12 @@ class FakeSettings:
     openrouter_model_profile: str = "profile-model"
     openrouter_model_report: str = "report-model"
 
+    def require_openrouter_api_key(self) -> None:
+        if not self.openrouter_api_key.strip():
+            from app.core.exceptions import ValidationFailure
+
+            raise ValidationFailure("OPENROUTER_API_KEY is required for AI generation")
+
 
 def _stringify(value) -> str:
     return json.dumps(value, default=str, ensure_ascii=False, sort_keys=True)
@@ -361,6 +367,14 @@ async def test_openrouter_client_does_not_retry_permanent_client_errors(
     assert len(route.calls) == 1
 
 
+def test_openrouter_client_requires_non_empty_api_key() -> None:
+    from app.core.exceptions import ValidationFailure
+    from app.services.openrouter_client import OpenRouterClient
+
+    with pytest.raises(ValidationFailure, match="OPENROUTER_API_KEY"):
+        OpenRouterClient(settings=FakeSettings(openrouter_api_key=" "))
+
+
 @pytest.mark.asyncio
 async def test_ai_generation_service_marks_generation_failed_when_openrouter_errors() -> None:
     from app.core.exceptions import OpenRouterTemporaryError
@@ -386,6 +400,79 @@ async def test_ai_generation_service_marks_generation_failed_when_openrouter_err
     assert generation_repository.runs[-1]["stage"] == GenerationStage.ASTROLOGY_PROFILE_EXTRACTION
     assert generation_repository.runs[-1]["error_message"] == "temporary outage"
     assert generation_repository.runs[-1]["raw_request"]["messages"] == "[redacted]"
+
+
+@pytest.mark.asyncio
+async def test_ai_generation_service_commits_progress_before_external_calls() -> None:
+    from app.services.ai_generation_service import AIGenerationService
+
+    events = []
+    generation = FakeGeneration()
+    generation_repository = FakeGenerationRepository(generation)
+    openrouter_client = SuccessfulOpenRouterClient(events=events)
+
+    async def commit() -> None:
+        events.append("commit")
+
+    await AIGenerationService(
+        generation_repository=generation_repository,
+        prompt_template_repository=FakePromptRepository(),
+        natal_chart_service=FakeNatalChartService(),
+        prompt_builder=FakePromptBuilder(),
+        persona_context_provider=FakeContextProvider(),
+        openrouter_client=openrouter_client,
+        settings=FakeSettings(),
+        commit=commit,
+    ).generate(generation.id)
+
+    assert events == [
+        "commit",
+        "commit",
+        "call:profile-model",
+        "commit",
+        "call:report-model",
+        "commit",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_ai_generation_service_rolls_back_before_persisting_failure() -> None:
+    from app.core.exceptions import OpenRouterTemporaryError
+    from app.services.ai_generation_service import AIGenerationService
+
+    events = []
+    generation = FakeGeneration()
+    generation_repository = EventingGenerationRepository(generation, events)
+
+    async def commit() -> None:
+        events.append("commit")
+
+    async def rollback() -> None:
+        events.append("rollback")
+
+    with pytest.raises(OpenRouterTemporaryError):
+        await AIGenerationService(
+            generation_repository=generation_repository,
+            prompt_template_repository=FakePromptRepository(),
+            natal_chart_service=FakeNatalChartService(),
+            prompt_builder=FakePromptBuilder(),
+            persona_context_provider=FakeContextProvider(),
+            openrouter_client=FailingOpenRouterClient(events=events),
+            settings=FakeSettings(),
+            commit=commit,
+            rollback=rollback,
+        ).generate(generation.id)
+
+    assert events == [
+        "commit",
+        "run:natal_chart_build",
+        "commit",
+        "call:profile-model",
+        "rollback",
+        "fail",
+        "run:astrology_profile_extraction",
+        "commit",
+    ]
 
 
 @pytest.mark.asyncio
@@ -550,6 +637,20 @@ class FakeGenerationRepository:
         return values
 
 
+class EventingGenerationRepository(FakeGenerationRepository):
+    def __init__(self, generation, events) -> None:
+        super().__init__(generation)
+        self.events = events
+
+    async def fail(self, generation_id, error_message):
+        self.events.append("fail")
+        await super().fail(generation_id, error_message)
+
+    async def create_run(self, values):
+        self.events.append(f"run:{values['stage'].value}")
+        return await super().create_run(values)
+
+
 class FakePromptRepository:
     async def get_active(self, template_type):
         return PromptTemplate(
@@ -595,11 +696,14 @@ class FakeOpenRouterResult:
 
 
 class SuccessfulOpenRouterClient:
-    def __init__(self) -> None:
+    def __init__(self, events=None) -> None:
         self.calls = []
         self.results = []
+        self.events = events
 
     async def chat_completion(self, model, messages, response_format=None):
+        if self.events is not None:
+            self.events.append(f"call:{model}")
         self.calls.append(
             {
                 "model": model,
@@ -616,7 +720,12 @@ class SuccessfulOpenRouterClient:
 
 
 class FailingOpenRouterClient:
+    def __init__(self, events=None) -> None:
+        self.events = events
+
     async def chat_completion(self, model, messages, response_format=None):
         from app.core.exceptions import OpenRouterTemporaryError
 
+        if self.events is not None:
+            self.events.append(f"call:{model}")
         raise OpenRouterTemporaryError("temporary outage")

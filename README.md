@@ -29,6 +29,10 @@ Edit `.env` and fill:
 OPENROUTER_API_KEY=your-real-openrouter-key
 ```
 
+`OPENROUTER_API_KEY` is required for AI generation. Compose files can still be
+rendered without a `.env`, but the worker/OpenRouter client fails fast before
+generation if the key is empty.
+
 The checked-in Docker Compose file injects container-friendly service URLs for PostgreSQL and Redis. If you run the API or worker directly on the host while PostgreSQL/Redis are running in Docker Compose, use localhost-based values:
 
 ```dotenv

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import async_session_factory
-from app.core.exceptions import NatalAIError, NotFoundError
+from app.core.exceptions import NatalAIError, NotFoundError, ValidationFailure
 from app.core.logging import configure_logging
 
 
@@ -14,6 +14,19 @@ def test_settings_defaults_are_test_friendly() -> None:
     assert settings.app_env == "test"
     assert settings.database_url.endswith("/natalai_test")
     assert settings.openrouter_api_key == "test-key"
+
+
+def test_settings_runtime_validation_rejects_empty_openrouter_key() -> None:
+    from app.core.config import Settings
+
+    settings = Settings(OPENROUTER_API_KEY=" ")
+
+    try:
+        settings.require_openrouter_api_key()
+    except ValidationFailure as exc:
+        assert "OPENROUTER_API_KEY" in str(exc)
+    else:
+        raise AssertionError("expected ValidationFailure")
 
 
 def test_database_sessionmaker_creates_async_sessions() -> None:
