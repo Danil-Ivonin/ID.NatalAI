@@ -443,3 +443,97 @@ async def test_prompt_activate_bulk_deactivates_and_flushes_before_target_activa
     assert compiled.startswith("UPDATE prompt_templates")
     assert "is_active=false" in compiled
     assert "prompt_templates.id !=" in compiled
+
+
+@pytest.mark.db_integration
+@pytest.mark.asyncio
+async def test_prompt_template_activation_persists_single_active_template(
+    db_session,
+) -> None:
+    from app.repositories.prompt_template_repository import PromptTemplateRepository
+
+    repository = PromptTemplateRepository(db_session)
+    first = await repository.create(
+        PromptTemplateCreate(
+            name="Profile v1",
+            type=PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION,
+            version=1,
+            content="old",
+            is_active=True,
+            metadata={},
+        )
+    )
+    second = await repository.create(
+        PromptTemplateCreate(
+            name="Profile v2",
+            type=PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION,
+            version=2,
+            content="new",
+            is_active=False,
+            metadata={},
+        )
+    )
+
+    await repository.activate(second.id)
+    await db_session.commit()
+
+    active = await repository.get_active(PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION)
+    templates = await repository.list(PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION)
+
+    assert active is not None
+    assert active.id == second.id
+    assert {template.id: template.is_active for template in templates} == {
+        first.id: False,
+        second.id: True,
+    }
+
+
+@pytest.mark.db_integration
+@pytest.mark.asyncio
+async def test_generation_status_transitions_persist_in_db(db_session) -> None:
+    from app.repositories.generation_repository import GenerationRepository
+    from app.repositories.persona_repository import PersonaRepository
+
+    persona = await PersonaRepository(db_session).create(
+        PersonaCreate(
+            name="Status Persona",
+            slug=f"status-{uuid4().hex}",
+            description=None,
+            style_profile=PersonaStyleProfileCreate(
+                voice_description="Direct.",
+                humor_style="Dry.",
+                speech_patterns=[],
+                forbidden_rules=[],
+                allowed_rules=[],
+            ),
+        )
+    )
+    repository = GenerationRepository(db_session)
+    generation = await repository.create(
+        GenerationCreate(
+            person_name="Ada",
+            gender=None,
+            birth_date=date(1990, 1, 2),
+            birth_time=time(3, 4),
+            birth_place=BirthPlace(
+                city="Moscow",
+                country="Russia",
+                lat=55.7558,
+                lng=37.6173,
+                timezone="Europe/Moscow",
+            ),
+            persona_id=persona.id,
+        )
+    )
+
+    await repository.set_status(generation.id, GenerationStatus.PROCESSING)
+    await repository.save_result(generation.id, {"title": "Report"}, "Report text")
+    await db_session.commit()
+
+    loaded = await repository.get(generation.id)
+
+    assert loaded is not None
+    assert loaded.status == GenerationStatus.COMPLETED
+    assert loaded.result_json == {"title": "Report"}
+    assert loaded.result_text == "Report text"
+    assert loaded.completed_at is not None

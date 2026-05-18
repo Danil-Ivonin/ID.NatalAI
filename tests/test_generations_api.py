@@ -3,18 +3,8 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
 
-from app.core.database import get_session
 from app.domain.generation.enums import GenerationStatus
-
-
-class FakeSession:
-    def __init__(self) -> None:
-        self.commits = 0
-
-    async def commit(self) -> None:
-        self.commits += 1
 
 
 class FakePersonaRepository:
@@ -53,30 +43,17 @@ class FakeGenerationRepository:
 
 
 @pytest.fixture
-def client(monkeypatch):
+def client(monkeypatch, generation_dispatch_spy, app_client):
     from app.api.v1 import generations
-    from app.main import app
 
-    session = FakeSession()
-    dispatched = []
     FakePersonaRepository.active_personas = {}
     FakeGenerationRepository.generations = {}
     FakeGenerationRepository.created_payloads = []
 
-    async def override_get_session():
-        yield session
-
-    app.dependency_overrides[get_session] = override_get_session
     monkeypatch.setattr(generations, "PersonaRepository", FakePersonaRepository)
     monkeypatch.setattr(generations, "GenerationRepository", FakeGenerationRepository)
-    monkeypatch.setattr(generations, "dispatch_generation_job", dispatched.append)
-
-    with TestClient(app) as test_client:
-        test_client.fake_session = session
-        test_client.dispatched_generation_ids = dispatched
-        yield test_client
-
-    app.dependency_overrides.clear()
+    app_client.dispatched_generation_ids = generation_dispatch_spy
+    return app_client
 
 
 def generation_payload(persona_id, person_name="Ada Lovelace"):

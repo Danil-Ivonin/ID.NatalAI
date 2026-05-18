@@ -1,11 +1,7 @@
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
 
-import app.db.models  # noqa: F401
-from app.core.database import Base, engine
 from app.domain.persona.context import PersonaContext, PersonaContextProvider
 from app.domain.persona.schemas import (
     PersonaCreate,
@@ -46,69 +42,58 @@ class RepositoryPersonaContextProvider:
         )
 
 
-async def _ensure_postgres_schema_or_skip() -> None:
-    try:
-        async with engine.begin() as connection:
-            await connection.execute(text("select 1"))
-            await connection.run_sync(Base.metadata.create_all)
-    except (OSError, SQLAlchemyError) as exc:
-        pytest.skip(f"PostgreSQL test DB is not reachable: {exc}")
-
-
+@pytest.mark.db_integration
 @pytest.mark.asyncio
-async def test_persona_context_provider_loads_repository_context_from_db() -> None:
-    await _ensure_postgres_schema_or_skip()
-
-    from app.core.database import async_session_factory
-
-    async with async_session_factory() as session:
-        repository = PersonaRepository(session)
-        slug = f"context-{uuid4().hex}"
-        persona = await repository.create(
-            PersonaCreate(
-                name="Shrek",
-                slug=slug,
-                description="Direct fairy tale swamp wisdom.",
-                style_profile=PersonaStyleProfileCreate(
-                    voice_description="Blunt, warm, and impatient.",
-                    humor_style="Dry roasts.",
-                    speech_patterns=["short sentences"],
-                    forbidden_rules=["no hate"],
-                    allowed_rules=["tease lightly"],
+async def test_persona_context_provider_loads_repository_context_from_db(
+    db_session,
+) -> None:
+    repository = PersonaRepository(db_session)
+    slug = f"context-{uuid4().hex}"
+    persona = await repository.create(
+        PersonaCreate(
+            name="Shrek",
+            slug=slug,
+            description="Direct fairy tale swamp wisdom.",
+            style_profile=PersonaStyleProfileCreate(
+                voice_description="Blunt, warm, and impatient.",
+                humor_style="Dry roasts.",
+                speech_patterns=["short sentences"],
+                forbidden_rules=["no hate"],
+                allowed_rules=["tease lightly"],
+            ),
+            quotes=[
+                PersonaQuoteCreate(
+                    text="Better out than in.",
+                    usage_context="general",
+                    is_allowed=True,
                 ),
-                quotes=[
-                    PersonaQuoteCreate(
-                        text="Better out than in.",
-                        usage_context="general",
-                        is_allowed=True,
-                    ),
-                    PersonaQuoteCreate(
-                        text="Forbidden quote.",
-                        usage_context="do not use",
-                        is_allowed=False,
-                    ),
-                ],
-                phrase_templates=[
-                    PersonaPhraseTemplateCreate(
-                        type="intro",
-                        template="{subject}, listen.",
-                        usage="openings",
-                    )
-                ],
-                style_examples=[
-                    PersonaStyleExampleCreate(
-                        title="Advice",
-                        text="That plan needs boots.",
-                        tags=["advice"],
-                    )
-                ],
-            )
+                PersonaQuoteCreate(
+                    text="Forbidden quote.",
+                    usage_context="do not use",
+                    is_allowed=False,
+                ),
+            ],
+            phrase_templates=[
+                PersonaPhraseTemplateCreate(
+                    type="intro",
+                    template="{subject}, listen.",
+                    usage="openings",
+                )
+            ],
+            style_examples=[
+                PersonaStyleExampleCreate(
+                    title="Advice",
+                    text="That plan needs boots.",
+                    tags=["advice"],
+                )
+            ],
         )
-        await session.commit()
+    )
+    await db_session.commit()
 
-        provider: PersonaContextProvider = RepositoryPersonaContextProvider(repository)
+    provider: PersonaContextProvider = RepositoryPersonaContextProvider(repository)
 
-        context = await provider.get_context(persona.id)
+    context = await provider.get_context(persona.id)
 
     assert context.persona_name == "Shrek"
     assert context.allowed_quotes == ["Better out than in."]
