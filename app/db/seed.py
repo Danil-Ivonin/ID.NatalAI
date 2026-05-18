@@ -5,7 +5,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import Protocol
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 import app.db.models  # noqa: F401
 from app.core.database import async_session_factory
@@ -344,6 +344,18 @@ async def seed_session(session: SeedSession) -> list[PlanItem]:
 async def _upsert_prompt_template(
     session: SeedSession, seed: PromptTemplateSeed
 ) -> str:
+    if seed.is_active:
+        await session.execute(
+            update(PromptTemplate)
+            .where(
+                PromptTemplate.type == seed.type,
+                PromptTemplate.is_active.is_(True),
+                PromptTemplate.version != seed.version,
+            )
+            .values(is_active=False)
+        )
+        await session.flush()
+
     result = await session.execute(
         select(PromptTemplate).where(
             PromptTemplate.type == seed.type,
@@ -368,19 +380,8 @@ async def _upsert_prompt_template(
         template.template_metadata = dict(seed.template_metadata)
         template.is_active = seed.is_active
 
-    await _activate_only_prompt_version(session, seed.type, seed.version)
     await session.flush()
     return action
-
-
-async def _activate_only_prompt_version(
-    session: SeedSession, prompt_type: PromptTemplateType, version: int
-) -> None:
-    result = await session.execute(
-        select(PromptTemplate).where(PromptTemplate.type == prompt_type)
-    )
-    for template in result.scalars().all():
-        template.is_active = template.version == version
 
 
 async def _upsert_persona(

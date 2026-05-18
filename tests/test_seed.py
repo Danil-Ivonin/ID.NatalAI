@@ -38,9 +38,11 @@ class FakeSeedSession:
         self.flushed = 0
         self.committed = 0
         self.executed = []
+        self.operations = []
 
     def add(self, instance) -> None:
         self.added.append(instance)
+        self.operations.append(("add", instance))
         if isinstance(instance, PromptTemplate):
             self.prompts.append(instance)
         elif isinstance(instance, Persona):
@@ -57,6 +59,10 @@ class FakeSeedSession:
     async def execute(self, statement):
         self.executed.append(statement)
         sql = str(statement)
+        if "UPDATE prompt_templates" in sql:
+            self.operations.append(("execute_update", statement))
+            return FakeExecuteResult()
+        self.operations.append(("execute_select", statement))
         if "FROM prompt_templates" in sql:
             prompt_type = statement.compile().params.get("type_1")
             version = statement.compile().params.get("version_1")
@@ -98,9 +104,11 @@ class FakeSeedSession:
 
     async def flush(self) -> None:
         self.flushed += 1
+        self.operations.append(("flush", None))
 
     async def commit(self) -> None:
         self.committed += 1
+        self.operations.append(("commit", None))
 
 
 def test_seed_data_contains_required_prompt_and_persona_markers() -> None:
@@ -162,3 +170,32 @@ async def test_seed_is_idempotent_by_natural_keys() -> None:
         {example.title for example in session.style_examples}
     )
     assert session.committed == 2
+
+
+@pytest.mark.asyncio
+async def test_seed_deactivates_existing_active_prompt_before_target_activation() -> None:
+    from app.db import seed
+
+    session = FakeSeedSession()
+    session.prompts.append(
+        PromptTemplate(
+            name="Old Profile",
+            type=PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION,
+            version=2,
+            content="old",
+            is_active=True,
+            template_metadata={},
+        )
+    )
+
+    await seed.seed_session(session)
+
+    operation_names = [operation for operation, _ in session.operations]
+    assert operation_names[:3] == ["execute_update", "flush", "execute_select"]
+    prompt_add_index = next(
+        index
+        for index, (operation, instance) in enumerate(session.operations)
+        if operation == "add" and isinstance(instance, PromptTemplate)
+    )
+    deactivation_flush_index = operation_names.index("flush")
+    assert deactivation_flush_index < prompt_add_index
