@@ -104,13 +104,13 @@ uv run celery -A app.core.celery_app.celery_app worker --loglevel=info
 List seeded personas and copy an active persona `id`:
 
 ```powershell
-curl http://localhost:8000/api/v1/personas
+curl.exe http://localhost:8000/api/v1/personas
 ```
 
 Create a generation job:
 
 ```powershell
-curl -X POST http://localhost:8000/api/v1/generations `
+curl.exe -X POST http://localhost:8000/api/v1/generations `
   -H "Content-Type: application/json" `
   -d '{
     "person_name": "Alex",
@@ -131,7 +131,7 @@ curl -X POST http://localhost:8000/api/v1/generations `
 The response includes a `generation_id`. Check job status and result:
 
 ```powershell
-curl http://localhost:8000/api/v1/generations/replace-with-generation-id
+curl.exe http://localhost:8000/api/v1/generations/replace-with-generation-id
 ```
 
 ## Tests
