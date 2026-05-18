@@ -37,19 +37,20 @@ def pytest_configure(config) -> None:
     )
 
 
-def _configured_database_url() -> str:
+def _configured_database_url() -> tuple[str, str]:
     from app.core.config import get_settings
 
-    return str(get_settings().database_url)
+    settings = get_settings()
+    return str(settings.database_url), settings.app_env
 
 
-def _allows_schema_management(database_url: str) -> bool:
+def _allows_schema_management(database_url: str, app_env: str) -> bool:
     parsed = make_url(database_url)
     database_name = parsed.database or ""
-    host = parsed.host or ""
-    return "test" in database_url.lower() or (
-        host in {"localhost", "127.0.0.1", "::1"}
-        and database_name == "natalai_test"
+    return (
+        app_env == "test"
+        and parsed.drivername == "postgresql+asyncpg"
+        and (database_name == "natalai_test" or database_name.endswith("_test"))
     )
 
 
@@ -57,11 +58,12 @@ def _allows_schema_management(database_url: str) -> bool:
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     from app.core.database import Base
 
-    database_url = _configured_database_url()
-    if not _allows_schema_management(database_url):
+    database_url, app_env = _configured_database_url()
+    if not _allows_schema_management(database_url, app_env):
+        database_name = make_url(database_url).database or "<unknown>"
         pytest.skip(
-            "Refusing to manage schema because DATABASE_URL is not clearly a "
-            f"test database: {database_url}"
+            "Refusing to manage schema because APP_ENV/DATABASE_URL are not "
+            f"clearly test-scoped: APP_ENV={app_env}, database={database_name}"
         )
 
     test_engine = create_async_engine(
@@ -71,13 +73,15 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
     )
 
     try:
-        async with test_engine.begin() as connection:
+        async with test_engine.connect() as connection:
             await connection.execute(text("select 1"))
-            await connection.run_sync(Base.metadata.drop_all)
-            await connection.run_sync(Base.metadata.create_all)
     except (OSError, SQLAlchemyError) as exc:
         await test_engine.dispose()
         pytest.skip(f"PostgreSQL test DB is not reachable: {exc}")
+
+    async with test_engine.begin() as connection:
+        await connection.run_sync(Base.metadata.drop_all)
+        await connection.run_sync(Base.metadata.create_all)
 
     session_factory = async_sessionmaker(test_engine, expire_on_commit=False)
     session = session_factory()
