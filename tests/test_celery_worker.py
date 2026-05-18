@@ -1,4 +1,4 @@
-from inspect import iscoroutinefunction
+from inspect import getsource, iscoroutinefunction
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -24,6 +24,12 @@ def test_dispatch_generation_job_delays_worker_task(monkeypatch) -> None:
     dispatch_generation_job(generation_id)
 
     assert delayed == [str(generation_id)]
+
+
+def test_dispatch_generation_job_does_not_suppress_import_errors() -> None:
+    from app.api.v1.generations import dispatch_generation_job
+
+    assert "except ModuleNotFoundError" not in getsource(dispatch_generation_job)
 
 
 def test_celery_app_imports_worker_task() -> None:

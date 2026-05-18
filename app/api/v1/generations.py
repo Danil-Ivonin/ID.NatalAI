@@ -17,10 +17,7 @@ router = APIRouter(prefix="/generations", tags=["generations"])
 
 def dispatch_generation_job(generation_id: UUID) -> None:
     """Dispatch background generation while keeping tests monkeypatchable."""
-    try:
-        from app.workers.tasks import generate_natal_report_task
-    except ModuleNotFoundError:
-        return
+    from app.workers.tasks import generate_natal_report_task
 
     generate_natal_report_task.delay(str(generation_id))
 
