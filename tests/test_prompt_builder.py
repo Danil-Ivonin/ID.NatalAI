@@ -74,7 +74,7 @@ def test_build_styled_report_prompt_includes_inputs_schema_and_safety_rules() ->
     assert "Anonymous" in user_prompt
     assert "do not invent astrology data" in user_prompt
     assert "no long copied quotes" in user_prompt
-    assert "real-person impersonation disclaimer" in user_prompt
+    assert "real-person impersonation disclaimer" not in user_prompt
     assert "maximum-intensity roast/profanity/dark humor" in user_prompt
     assert "protected-class dehumanization" in user_prompt
     assert "real-world violence encouragement" in user_prompt

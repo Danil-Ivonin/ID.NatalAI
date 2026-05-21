@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.database import async_session_factory
 from app.core.exceptions import NatalAIError, NotFoundError, ValidationFailure
-from app.core.logging import configure_logging
+from app.core.logging import ExtraFormatter, configure_logging
 
 
 def test_settings_defaults_are_test_friendly() -> None:
@@ -43,3 +43,23 @@ def test_configure_logging_uses_standard_logging() -> None:
     configure_logging()
 
     assert logging.getLogger().handlers
+
+
+def test_extra_formatter_includes_context_fields() -> None:
+    formatter = ExtraFormatter("%(levelname)s %(message)s")
+    record = logging.LogRecord(
+        name="test",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="generation stage started",
+        args=(),
+        exc_info=None,
+    )
+    record.generation_id = "generation-1"
+    record.stage = "natal_chart_build"
+
+    assert (
+        formatter.format(record)
+        == "INFO generation stage started generation_id=generation-1 stage=natal_chart_build"
+    )

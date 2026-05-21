@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 import anyio
@@ -14,14 +15,30 @@ from app.services.openrouter_client import OpenRouterClient
 from app.services.persona_context_service import PostgresPersonaContextProvider
 from app.services.prompt_builder import PromptBuilder
 
+logger = logging.getLogger(__name__)
+
 
 @celery_app.task(name="generate_natal_report_task")
 def generate_natal_report_task(generation_id: str) -> None:
+    logger.info(
+        "generation task received",
+        extra={"generation_id": generation_id},
+    )
     anyio.run(_run_generation, generation_id)
 
 
 async def _run_generation(generation_id: str) -> None:
     settings = get_settings()
+    logger.info(
+        "generation task started",
+        extra={
+            "generation_id": generation_id,
+            "openrouter_model_profile": getattr(
+                settings, "openrouter_model_profile", None
+            ),
+            "openrouter_model_report": getattr(settings, "openrouter_model_report", None),
+        },
+    )
     async with async_session_factory() as session:
         generation_repository = GenerationRepository(session)
         prompt_template_repository = PromptTemplateRepository(session)
@@ -43,3 +60,7 @@ async def _run_generation(generation_id: str) -> None:
             )
 
             await service.generate(UUID(generation_id))
+    logger.info(
+        "generation task completed",
+        extra={"generation_id": generation_id},
+    )

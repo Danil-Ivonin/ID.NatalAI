@@ -47,7 +47,6 @@ class PromptBuilder:
             "do not invent astrology data; use only the supplied astrology profile.",
             "Use no markdown and no text outside JSON.",
             "Use no long copied quotes from persona examples or allowed quotes.",
-            "Include a real-person impersonation disclaimer when styling resembles a real person.",
             "maximum-intensity roast/profanity/dark humor is allowed if persona rules allow it.",
             "hard stop: no protected-class dehumanization and no real-world violence encouragement.",
         ]

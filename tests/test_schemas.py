@@ -14,7 +14,8 @@ from app.domain.generation.schemas import (
 from app.domain.generation.ai_schemas import AstrologyProfile, StyledNatalReport
 from app.domain.persona.context import PersonaContext, PersonaContextProvider
 from app.domain.prompts.enums import PromptTemplateType
-from app.domain.prompts.schemas import PromptTemplateActivateResponse
+from app.domain.prompts.models import PromptTemplate
+from app.domain.prompts.schemas import PromptTemplateActivateResponse, PromptTemplateRead
 
 
 def test_generation_create_accepts_missing_person_name_and_null_gender() -> None:
@@ -301,4 +302,27 @@ def test_prompt_template_activate_response_exposes_read_fields_and_metadata_alia
     assert response.template_metadata == {"model": "test-model"}
     assert response.created_at == created_at
     assert response.updated_at == updated_at
+    assert response.model_dump(by_alias=True)["metadata"] == {"model": "test-model"}
+
+
+def test_prompt_template_read_prefers_orm_template_metadata_over_sqlalchemy_metadata() -> None:
+    prompt_template_id = uuid4()
+    created_at = datetime(2026, 5, 15, tzinfo=timezone.utc)
+    updated_at = datetime(2026, 5, 16, tzinfo=timezone.utc)
+    source = PromptTemplate(
+        id=prompt_template_id,
+        name="Astrology profile v2",
+        type=PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION,
+        version=2,
+        content="Extract profile",
+        is_active=True,
+        template_metadata={"model": "test-model"},
+    )
+    source.created_at = created_at
+    source.updated_at = updated_at
+
+    response = PromptTemplateRead.model_validate(source)
+
+    assert response.id == prompt_template_id
+    assert response.template_metadata == {"model": "test-model"}
     assert response.model_dump(by_alias=True)["metadata"] == {"model": "test-model"}

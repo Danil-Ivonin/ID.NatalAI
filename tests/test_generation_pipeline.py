@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import date, time
 from uuid import uuid4
@@ -528,6 +529,37 @@ async def test_ai_generation_service_successful_orchestration_records_outputs_an
     for call in openrouter_client.results:
         assert not hasattr(call, "raw_request")
         assert "sk-secret-test" not in _stringify(call.raw_response)
+
+
+@pytest.mark.asyncio
+async def test_ai_generation_service_logs_pipeline_progress(caplog) -> None:
+    from app.services.ai_generation_service import AIGenerationService
+
+    generation = FakeGeneration()
+    generation_repository = FakeGenerationRepository(generation)
+
+    with caplog.at_level(logging.INFO):
+        await AIGenerationService(
+            generation_repository=generation_repository,
+            prompt_template_repository=FakePromptRepository(),
+            natal_chart_service=FakeNatalChartService(),
+            prompt_builder=FakePromptBuilder(),
+            persona_context_provider=FakeContextProvider(),
+            openrouter_client=SuccessfulOpenRouterClient(),
+            settings=FakeSettings(openrouter_api_key="sk-secret-test"),
+        ).generate(generation.id)
+
+    messages = [record.message for record in caplog.records]
+    assert "generation pipeline started" in messages
+    assert messages.count("generation stage started") == 3
+    assert messages.count("openrouter call started") == 2
+    assert "generation pipeline completed" in messages
+    logged_fields = {
+        key: value
+        for record in caplog.records
+        for key, value in record.__dict__.items()
+    }
+    assert "sk-secret-test" not in _stringify(logged_fields)
 
 
 class FakePersonaRepository:

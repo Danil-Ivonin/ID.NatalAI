@@ -76,6 +76,18 @@ class OpenRouterClient:
         ):
             with attempt:
                 started = perf_counter()
+                attempt_number = attempt.retry_state.attempt_number
+                logger.info(
+                    "openrouter request started",
+                    extra={
+                        "model": model,
+                        "attempt": attempt_number,
+                        "message_count": len(messages),
+                        "response_format_type": None
+                        if response_format is None
+                        else response_format.get("type"),
+                    },
+                )
                 try:
                     response = await self._client.post(
                         "/chat/completions",
@@ -89,7 +101,7 @@ class OpenRouterClient:
                         extra={
                             "model": model,
                             "latency_ms": latency_ms,
-                            "attempt": attempt.retry_state.attempt_number,
+                            "attempt": attempt_number,
                         },
                     )
                     raise OpenRouterTemporaryError(str(exc)) from exc
@@ -101,6 +113,7 @@ class OpenRouterClient:
                         "model": model,
                         "status_code": response.status_code,
                         "latency_ms": latency_ms,
+                        "attempt": attempt_number,
                     },
                 )
 
