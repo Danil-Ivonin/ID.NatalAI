@@ -7,6 +7,7 @@ def test_build_natal_chart_uses_kerykeion_birth_data_and_xml_context(monkeypatch
     captured_birth_data = {}
     captured_chart_subject = {}
     captured_context_data = {}
+    captured_drawer = {}
 
     class FakeSubjectFactory:
         @staticmethod
@@ -34,6 +35,13 @@ def test_build_natal_chart_uses_kerykeion_birth_data_and_xml_context(monkeypatch
         captured_context_data["chart_data"] = chart_data
         return "<natal>xml</natal>"
 
+    class FakeChartDrawer:
+        def __init__(self, **kwargs):
+            captured_drawer.update(kwargs)
+
+        def generate_svg_string(self):
+            return "<svg>chart</svg>"
+
     monkeypatch.setattr(
         "app.services.natal_chart_service.AstrologicalSubjectFactory",
         FakeSubjectFactory,
@@ -43,6 +51,7 @@ def test_build_natal_chart_uses_kerykeion_birth_data_and_xml_context(monkeypatch
         FakeChartDataFactory,
     )
     monkeypatch.setattr("app.services.natal_chart_service.to_context", fake_to_context)
+    monkeypatch.setattr("app.services.natal_chart_service.ChartDrawer", FakeChartDrawer)
 
     result = NatalChartService().build_natal_chart(
         person_name="Natasha",
@@ -56,6 +65,14 @@ def test_build_natal_chart_uses_kerykeion_birth_data_and_xml_context(monkeypatch
 
     assert result.natal_xml == "<natal>xml</natal>"
     assert result.chart_data_json == {"chart": {"subject": "Natasha"}}
+    assert result.chart_svg == b"<svg>chart</svg>"
+    assert captured_drawer == {
+        "chart_data": {"chart": {"subject": "Natasha"}},
+        "chart_language": "RU",
+        "show_zodiac_background_ring": True,
+        "style": "modern",
+        "theme": "dark",
+    }
     assert captured_birth_data == {
         "name": "Natasha",
         "year": 1992,
@@ -99,6 +116,14 @@ def test_build_natal_chart_uses_anonymous_fallback_for_missing_name(monkeypatch)
         "app.services.natal_chart_service.to_context",
         lambda chart_data: "<anonymous />",
     )
+    monkeypatch.setattr(
+        "app.services.natal_chart_service.ChartDrawer",
+        lambda **kwargs: type(
+            "FakeChartDrawer",
+            (),
+            {"generate_svg_string": lambda self: "<svg>anonymous</svg>"},
+        )(),
+    )
 
     result = NatalChartService().build_natal_chart(
         person_name=None,
@@ -112,3 +137,4 @@ def test_build_natal_chart_uses_anonymous_fallback_for_missing_name(monkeypatch)
 
     assert captured_birth_data["name"] == "Anonymous"
     assert result.natal_xml == "<anonymous />"
+    assert result.chart_svg == b"<svg>anonymous</svg>"

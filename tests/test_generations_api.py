@@ -20,6 +20,7 @@ class FakePersonaRepository:
 class FakeGenerationRepository:
     generations = {}
     created_payloads = []
+    status = GenerationStatus.PENDING
 
     def __init__(self, session) -> None:
         self.session = session
@@ -29,7 +30,7 @@ class FakeGenerationRepository:
         generation = SimpleNamespace(
             id=uuid4(),
             person_name=payload.person_name,
-            status=GenerationStatus.PENDING,
+            status=self.status,
             result_text=None,
             error_message=None,
             created_at=datetime(2026, 5, 17, 10, 0, tzinfo=UTC),
@@ -42,6 +43,14 @@ class FakeGenerationRepository:
         return self.generations.get(generation_id)
 
 
+class FakeChartImageStorage:
+    def __init__(self, settings) -> None:
+        self.settings = settings
+
+    def presigned_url(self, object_key):
+        return f"https://storage.test/{object_key}?signature=test"
+
+
 @pytest.fixture
 def client(monkeypatch, generation_dispatch_spy, app_client):
     from app.api.v1 import generations
@@ -49,9 +58,11 @@ def client(monkeypatch, generation_dispatch_spy, app_client):
     FakePersonaRepository.active_personas = {}
     FakeGenerationRepository.generations = {}
     FakeGenerationRepository.created_payloads = []
+    FakeGenerationRepository.status = GenerationStatus.PENDING
 
     monkeypatch.setattr(generations, "PersonaRepository", FakePersonaRepository)
     monkeypatch.setattr(generations, "GenerationRepository", FakeGenerationRepository)
+    monkeypatch.setattr(generations, "ChartImageStorage", FakeChartImageStorage)
     app_client.dispatched_generation_ids = generation_dispatch_spy
     return app_client
 
@@ -70,6 +81,19 @@ def generation_payload(persona_id, person_name="Ada Lovelace"):
             "timezone": "Europe/Moscow",
         },
         "persona_id": str(persona_id),
+    }
+
+
+def styled_report_payload() -> dict:
+    section = {"title": "General", "text": "Readable section text."}
+    return {
+        "title": "Natal report",
+        "intro": {"title": "Intro", "text": "Intro text."},
+        "general": section,
+        "love_and_sex": {"title": "Love", "text": "Love text."},
+        "career_and_money": {"title": "Career", "text": "Career text."},
+        "demons": {"title": "Demons", "text": "Demons text."},
+        "final_summary": {"title": "Final", "text": "Final text."},
     }
 
 
@@ -113,12 +137,29 @@ def test_create_generation_without_person_name(client) -> None:
     ]
 
 
+def test_create_generation_accepts_string_status_from_database(client) -> None:
+    persona_id = uuid4()
+    FakePersonaRepository.active_personas[persona_id] = SimpleNamespace(
+        id=persona_id,
+        is_active=True,
+    )
+    FakeGenerationRepository.status = "pending"
+
+    response = client.post("/api/v1/generations", json=generation_payload(persona_id))
+
+    assert response.status_code == 201
+    assert response.json()["status"] == "pending"
+
+
 def test_get_generation(client) -> None:
     generation_id = uuid4()
     FakeGenerationRepository.generations[generation_id] = SimpleNamespace(
         id=generation_id,
         status=GenerationStatus.COMPLETED,
-        result_text="Natal report",
+        result_json=styled_report_payload(),
+        result_text="legacy plain text",
+        chart_image_object_key=f"generations/{generation_id}/natal-chart.svg",
+        chart_image_mime_type="image/svg+xml",
         error_message=None,
         created_at=datetime(2026, 5, 17, 10, 0, tzinfo=UTC),
         completed_at=datetime(2026, 5, 17, 10, 1, tzinfo=UTC),
@@ -130,8 +171,55 @@ def test_get_generation(client) -> None:
     assert response.json() == {
         "generation_id": str(generation_id),
         "status": "completed",
-        "result_text": "Natal report",
+        "result_text": styled_report_payload(),
+        "chart_image": {
+            "url": (
+                "https://storage.test/"
+                f"generations/{generation_id}/natal-chart.svg?signature=test"
+            ),
+            "mime_type": "image/svg+xml",
+        },
         "error_message": None,
         "created_at": "2026-05-17T10:00:00Z",
         "completed_at": "2026-05-17T10:01:00Z",
     }
+
+
+def test_get_generation_accepts_string_status_from_database(client) -> None:
+    generation_id = uuid4()
+    FakeGenerationRepository.generations[generation_id] = SimpleNamespace(
+        id=generation_id,
+        status="completed",
+        result_json=styled_report_payload(),
+        result_text="legacy plain text",
+        chart_image_object_key=None,
+        chart_image_mime_type=None,
+        error_message=None,
+        created_at=datetime(2026, 5, 17, 10, 0, tzinfo=UTC),
+        completed_at=datetime(2026, 5, 17, 10, 1, tzinfo=UTC),
+    )
+
+    response = client.get(f"/api/v1/generations/{generation_id}")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "completed"
+
+
+def test_get_generation_returns_null_chart_image_when_missing(client) -> None:
+    generation_id = uuid4()
+    FakeGenerationRepository.generations[generation_id] = SimpleNamespace(
+        id=generation_id,
+        status=GenerationStatus.COMPLETED,
+        result_json=styled_report_payload(),
+        result_text="legacy plain text",
+        chart_image_object_key=None,
+        chart_image_mime_type=None,
+        error_message=None,
+        created_at=datetime(2026, 5, 17, 10, 0, tzinfo=UTC),
+        completed_at=datetime(2026, 5, 17, 10, 1, tzinfo=UTC),
+    )
+
+    response = client.get(f"/api/v1/generations/{generation_id}")
+
+    assert response.status_code == 200
+    assert response.json()["chart_image"] is None

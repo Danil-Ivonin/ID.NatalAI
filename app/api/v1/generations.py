@@ -4,14 +4,17 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_session
 from app.domain.generation.schemas import (
+    ChartImageResponse,
     GenerationCreate,
     GenerationCreateResponse,
     GenerationDetailResponse,
 )
 from app.repositories.generation_repository import GenerationRepository
 from app.repositories.persona_repository import PersonaRepository
+from app.services.chart_image_storage import ChartImageStorage
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/generations", tags=["generations"])
@@ -67,7 +70,7 @@ async def create_generation(
         extra={
             "generation_id": str(generation.id),
             "persona_id": str(payload.persona_id),
-            "status": generation.status.value,
+            "status": str(generation.status),
         },
     )
     dispatch_generation_job(generation.id)
@@ -98,9 +101,18 @@ async def get_generation(
         "generation detail loaded",
         extra={
             "generation_id": str(generation_id),
-            "status": generation.status.value,
-            "has_result": generation.result_text is not None,
+            "status": str(generation.status),
+            "has_result": generation.result_json is not None,
             "has_error": generation.error_message is not None,
         },
     )
-    return GenerationDetailResponse.model_validate(generation)
+    response = GenerationDetailResponse.model_validate(generation)
+    object_key = getattr(generation, "chart_image_object_key", None)
+    mime_type = getattr(generation, "chart_image_mime_type", None)
+    if object_key is not None and mime_type is not None:
+        storage = ChartImageStorage(get_settings())
+        response.chart_image = ChartImageResponse(
+            url=storage.presigned_url(object_key),
+            mime_type=mime_type,
+        )
+    return response

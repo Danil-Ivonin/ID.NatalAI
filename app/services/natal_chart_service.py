@@ -5,6 +5,7 @@ from typing import Any
 
 from kerykeion import AstrologicalSubjectFactory, to_context
 from kerykeion.chart_data_factory import ChartDataFactory
+from kerykeion.charts.chart_drawer import ChartDrawer
 
 logger = logging.getLogger(__name__)
 
@@ -12,19 +13,22 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class NatalChartResult:
     natal_xml: str
+    chart_svg: bytes
     chart_data_json: dict[str, Any] | None = None
 
 
 class NatalChartService:
     def build_natal_chart(
-        self,
-        person_name: str | None,
-        gender: str | None,
-        birth_date: date,
-        birth_time: time,
-        lat: float,
-        lng: float,
-        timezone: str,
+            self,
+            person_name: str | None,
+            gender: str | None,
+            birth_date: date,
+            birth_time: time,
+            city: str,
+            nation: str,
+            lat: float,
+            lng: float,
+            timezone: str,
     ) -> NatalChartResult:
         chart_subject_name = person_name or "Anonymous"
         logger.info(
@@ -47,6 +51,8 @@ class NatalChartService:
             birth_date.day,
             birth_time.hour,
             birth_time.minute,
+            city=city,
+            nation=nation,
             lng=lng,
             lat=lat,
             tz_str=timezone,
@@ -54,6 +60,7 @@ class NatalChartService:
         )
         chart_data = ChartDataFactory.create_natal_chart_data(subject)
         natal_xml = to_context(chart_data)
+        chart_svg = self._draw_chart_svg(chart_data)
         chart_data_json = self._to_json_dict(chart_data)
 
         logger.info(
@@ -61,14 +68,28 @@ class NatalChartService:
             extra={
                 "chart_subject_name": chart_subject_name,
                 "natal_xml_chars": len(natal_xml),
+                "chart_svg_bytes": len(chart_svg),
                 "chart_data_available": chart_data_json is not None,
             },
         )
 
         return NatalChartResult(
             natal_xml=natal_xml,
+            chart_svg=chart_svg,
             chart_data_json=chart_data_json,
         )
+
+    @staticmethod
+    def _draw_chart_svg(chart_data: Any) -> bytes:
+        drawer = ChartDrawer(
+            chart_data=chart_data,
+            chart_language="RU",
+            show_zodiac_background_ring=True,
+            style="modern",
+            theme="dark",
+        )
+        svg = drawer.generate_svg_string()
+        return svg.encode("utf-8") if isinstance(svg, str) else svg
 
     @staticmethod
     def _to_json_dict(chart_data: Any) -> dict[str, Any] | None:

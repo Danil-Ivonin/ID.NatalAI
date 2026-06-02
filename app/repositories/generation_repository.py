@@ -58,11 +58,23 @@ class GenerationRepository:
             generation.astrology_profile_json = profile
             await self.session.flush()
 
+    async def save_chart_image(
+        self,
+        generation_id: UUID,
+        object_key: str,
+        mime_type: str,
+    ) -> None:
+        generation = await self.get(generation_id)
+        if generation is not None:
+            generation.chart_image_object_key = object_key
+            generation.chart_image_mime_type = mime_type
+            await self.session.flush()
+
     async def save_result(
         self,
         generation_id: UUID,
         result_json: dict[str, Any],
-        result_text: str,
+        result_text: str | None,
     ) -> None:
         generation = await self.get(generation_id)
         if generation is not None:

@@ -9,6 +9,7 @@ from uuid import uuid4
 import pytest
 import respx
 from httpx import Response
+from sqlalchemy.exc import MissingGreenlet
 
 from app.core.exceptions import NotFoundError
 from app.domain.generation.ai_schemas import AstrologyProfile, StyledNatalReport
@@ -404,6 +405,54 @@ async def test_ai_generation_service_marks_generation_failed_when_openrouter_err
 
 
 @pytest.mark.asyncio
+async def test_ai_generation_service_accepts_string_prompt_template_type() -> None:
+    from app.services.ai_generation_service import AIGenerationService
+
+    generation = FakeGeneration()
+    generation_repository = FakeGenerationRepository(generation)
+
+    await AIGenerationService(
+        generation_repository=generation_repository,
+        prompt_template_repository=FakePromptRepository(type_as_string=True),
+        natal_chart_service=FakeNatalChartService(),
+        prompt_builder=FakePromptBuilder(),
+        persona_context_provider=FakeContextProvider(),
+        openrouter_client=SuccessfulOpenRouterClient(),
+        settings=FakeSettings(),
+    ).generate(generation.id)
+
+    assert generation_repository.result[0] == generation.id
+
+
+@pytest.mark.asyncio
+async def test_ai_generation_service_does_not_read_expired_template_after_rollback() -> None:
+    from app.core.exceptions import OpenRouterTemporaryError
+    from app.services.ai_generation_service import AIGenerationService
+
+    generation = FakeGeneration()
+    generation_repository = FakeGenerationRepository(generation)
+    prompt_repository = ExpiringPromptRepository()
+
+    async def rollback() -> None:
+        prompt_repository.expire_loaded_templates()
+
+    with pytest.raises(OpenRouterTemporaryError):
+        await AIGenerationService(
+            generation_repository=generation_repository,
+            prompt_template_repository=prompt_repository,
+            natal_chart_service=FakeNatalChartService(),
+            prompt_builder=FakePromptBuilder(),
+            persona_context_provider=FakeContextProvider(),
+            openrouter_client=FailingOpenRouterClient(),
+            settings=FakeSettings(),
+            rollback=rollback,
+        ).generate(generation.id)
+
+    assert generation_repository.runs[-1]["prompt_template_id"] == prompt_repository.template_id
+    assert generation_repository.runs[-1]["prompt_template_version"] == 1
+
+
+@pytest.mark.asyncio
 async def test_ai_generation_service_commits_progress_before_external_calls() -> None:
     from app.services.ai_generation_service import AIGenerationService
 
@@ -482,6 +531,7 @@ async def test_ai_generation_service_successful_orchestration_records_outputs_an
 
     generation = FakeGeneration()
     generation_repository = FakeGenerationRepository(generation)
+    chart_image_storage = FakeChartImageStorage()
     openrouter_client = SuccessfulOpenRouterClient()
     settings = FakeSettings(openrouter_api_key="sk-secret-test")
 
@@ -489,6 +539,7 @@ async def test_ai_generation_service_successful_orchestration_records_outputs_an
         generation_repository=generation_repository,
         prompt_template_repository=FakePromptRepository(),
         natal_chart_service=FakeNatalChartService(),
+        chart_image_storage=chart_image_storage,
         prompt_builder=FakePromptBuilder(),
         persona_context_provider=FakeContextProvider(),
         openrouter_client=openrouter_client,
@@ -497,17 +548,21 @@ async def test_ai_generation_service_successful_orchestration_records_outputs_an
 
     assert generation_repository.statuses == [GenerationStatus.PROCESSING]
     assert generation_repository.natal_xml == [(generation.id, "<chart />")]
+    assert chart_image_storage.uploads == [
+        (
+            f"generations/{generation.id}/natal-chart.svg",
+            b"<svg>chart</svg>",
+            "image/svg+xml",
+        )
+    ]
+    assert generation_repository.chart_image == (
+        generation.id,
+        f"generations/{generation.id}/natal-chart.svg",
+        "image/svg+xml",
+    )
     assert AstrologyProfile.model_validate(generation_repository.profile[1])
     assert generation_repository.result[1]["title"] == "Natal report"
-    assert generation_repository.result[2] == (
-        "Natal report\n\n"
-        "Intro\nIntro text.\n\n"
-        "General\nReadable section text.\n\n"
-        "Love\nLove text.\n\n"
-        "Career\nCareer text.\n\n"
-        "Demons\nDemons text.\n\n"
-        "Final\nFinal text."
-    )
+    assert generation_repository.result[2] is None
     assert [run["stage"] for run in generation_repository.runs] == [
         GenerationStage.NATAL_CHART_BUILD,
         GenerationStage.ASTROLOGY_PROFILE_EXTRACTION,
@@ -525,7 +580,7 @@ async def test_ai_generation_service_successful_orchestration_records_outputs_an
     )
     assert "sk-secret-test" not in _stringify(generation_repository.runs)
     assert "sk-secret-test" not in _stringify(generation_repository.result[1])
-    assert "sk-secret-test" not in generation_repository.result[2]
+    assert "sk-secret-test" not in _stringify(generation_repository.result)
     for call in openrouter_client.results:
         assert not hasattr(call, "raw_request")
         assert "sk-secret-test" not in _stringify(call.raw_response)
@@ -643,6 +698,7 @@ class FakeGenerationRepository:
         self.natal_xml = []
         self.profile = None
         self.result = None
+        self.chart_image = None
         self.failed = []
         self.runs = []
 
@@ -657,6 +713,9 @@ class FakeGenerationRepository:
 
     async def save_profile(self, generation_id, profile):
         self.profile = (generation_id, profile)
+
+    async def save_chart_image(self, generation_id, object_key, mime_type):
+        self.chart_image = (generation_id, object_key, mime_type)
 
     async def save_result(self, generation_id, result_json, result_text):
         self.result = (generation_id, result_json, result_text)
@@ -684,11 +743,14 @@ class EventingGenerationRepository(FakeGenerationRepository):
 
 
 class FakePromptRepository:
+    def __init__(self, type_as_string: bool = False) -> None:
+        self.type_as_string = type_as_string
+
     async def get_active(self, template_type):
         return PromptTemplate(
             id=uuid4(),
             name=template_type.value,
-            type=template_type,
+            type=template_type.value if self.type_as_string else template_type,
             version=1,
             content=f"{template_type.value} template",
             is_active=True,
@@ -696,13 +758,50 @@ class FakePromptRepository:
         )
 
 
+class ExpiringPromptTemplate:
+    def __init__(self, template_id) -> None:
+        self._id = template_id
+        self.name = PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION.value
+        self.type = PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION.value
+        self.version = 1
+        self.content = "astrology_profile_extraction template"
+        self.expired = False
+
+    @property
+    def id(self):
+        if self.expired:
+            raise MissingGreenlet("template expired after rollback")
+        return self._id
+
+
+class ExpiringPromptRepository:
+    def __init__(self) -> None:
+        self.template_id = uuid4()
+        self.template = ExpiringPromptTemplate(self.template_id)
+
+    async def get_active(self, template_type):
+        return self.template
+
+    def expire_loaded_templates(self) -> None:
+        self.template.expired = True
+
+
 class FakeNatalChartResult:
     natal_xml = "<chart />"
+    chart_svg = b"<svg>chart</svg>"
 
 
 class FakeNatalChartService:
     def build_natal_chart(self, **kwargs):
         return FakeNatalChartResult()
+
+
+class FakeChartImageStorage:
+    def __init__(self) -> None:
+        self.uploads = []
+
+    async def upload(self, object_key, content, mime_type):
+        self.uploads.append((object_key, content, mime_type))
 
 
 class FakePromptBuilder:

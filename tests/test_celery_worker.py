@@ -59,6 +59,10 @@ async def test_run_generation_injects_transaction_callbacks(monkeypatch) -> None
         async def rollback(self):
             events.append("rollback")
 
+    class FakeEngine:
+        async def dispose(self):
+            events.append("dispose")
+
     class FakeOpenRouterClient:
         def __init__(self, settings):
             self.settings = settings
@@ -79,14 +83,106 @@ async def test_run_generation_injects_transaction_callbacks(monkeypatch) -> None
             await self.commit()
             await self.rollback()
 
-    monkeypatch.setattr(tasks, "get_settings", lambda: object())
-    monkeypatch.setattr(tasks, "async_session_factory", lambda: FakeSession())
+    class FakeChartImageStorage:
+        def __init__(self, settings):
+            self.settings = settings
+
+    monkeypatch.setattr(tasks, "get_settings", lambda: SimpleNamespace(database_url="db"))
+    monkeypatch.setattr(
+        tasks,
+        "create_async_engine",
+        lambda database_url, pool_pre_ping: FakeEngine(),
+    )
+    monkeypatch.setattr(
+        tasks,
+        "async_sessionmaker",
+        lambda engine, expire_on_commit: lambda: FakeSession(),
+    )
     monkeypatch.setattr(tasks, "GenerationRepository", lambda session: object())
     monkeypatch.setattr(tasks, "PromptTemplateRepository", lambda session: object())
     monkeypatch.setattr(tasks, "PersonaRepository", lambda session: object())
     monkeypatch.setattr(tasks, "OpenRouterClient", FakeOpenRouterClient)
+    monkeypatch.setattr(tasks, "ChartImageStorage", FakeChartImageStorage)
     monkeypatch.setattr(tasks, "AIGenerationService", FakeAIGenerationService)
 
     await tasks._run_generation(str(uuid4()))
 
-    assert events == ["callbacks", "commit", "rollback"]
+    assert events == ["callbacks", "commit", "rollback", "dispose"]
+
+
+@pytest.mark.asyncio
+async def test_run_generation_uses_loop_local_session_factory(monkeypatch) -> None:
+    from app.workers import tasks
+
+    events = []
+
+    class FakeEngine:
+        async def dispose(self):
+            events.append("dispose")
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        async def commit(self):
+            events.append("commit")
+
+        async def rollback(self):
+            events.append("rollback")
+
+    class FakeOpenRouterClient:
+        def __init__(self, settings):
+            self.settings = settings
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+    class FakeAIGenerationService:
+        def __init__(self, **kwargs):
+            events.append("service")
+
+        async def generate(self, generation_id):
+            events.append("generate")
+
+    class FakeChartImageStorage:
+        def __init__(self, settings):
+            self.settings = settings
+
+    def fail_if_global_factory_is_used():
+        raise AssertionError("worker must not reuse the app-level session factory")
+
+    monkeypatch.setattr(tasks, "get_settings", lambda: SimpleNamespace(database_url="db"))
+    monkeypatch.setattr(
+        tasks,
+        "async_session_factory",
+        fail_if_global_factory_is_used,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        tasks,
+        "create_async_engine",
+        lambda database_url, pool_pre_ping: FakeEngine(),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        tasks,
+        "async_sessionmaker",
+        lambda engine, expire_on_commit: lambda: FakeSession(),
+        raising=False,
+    )
+    monkeypatch.setattr(tasks, "GenerationRepository", lambda session: object())
+    monkeypatch.setattr(tasks, "PromptTemplateRepository", lambda session: object())
+    monkeypatch.setattr(tasks, "PersonaRepository", lambda session: object())
+    monkeypatch.setattr(tasks, "OpenRouterClient", FakeOpenRouterClient)
+    monkeypatch.setattr(tasks, "ChartImageStorage", FakeChartImageStorage)
+    monkeypatch.setattr(tasks, "AIGenerationService", FakeAIGenerationService)
+
+    await tasks._run_generation(str(uuid4()))
+
+    assert events == ["service", "generate", "dispose"]

@@ -40,6 +40,30 @@ class Settings(BaseSettings):
         default="openai/gpt-5",
         alias="OPENROUTER_MODEL_REPORT",
     )
+    chart_image_s3_endpoint_url: str = Field(
+        default="",
+        alias="CHART_IMAGE_S3_ENDPOINT_URL",
+    )
+    chart_image_s3_region: str = Field(
+        default="us-east-1",
+        alias="CHART_IMAGE_S3_REGION",
+    )
+    chart_image_s3_bucket: str = Field(
+        default="natalai-charts",
+        alias="CHART_IMAGE_S3_BUCKET",
+    )
+    chart_image_s3_access_key_id: str = Field(
+        default="",
+        alias="CHART_IMAGE_S3_ACCESS_KEY_ID",
+    )
+    chart_image_s3_secret_access_key: str = Field(
+        default="",
+        alias="CHART_IMAGE_S3_SECRET_ACCESS_KEY",
+    )
+    chart_image_url_expires_seconds: int = Field(
+        default=86400,
+        alias="CHART_IMAGE_URL_EXPIRES_SECONDS",
+    )
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
     def require_openrouter_api_key(self) -> None:

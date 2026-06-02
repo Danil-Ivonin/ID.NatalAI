@@ -33,6 +33,18 @@ OPENROUTER_API_KEY=your-real-openrouter-key
 rendered without a `.env`, but the worker/OpenRouter client fails fast before
 generation if the key is empty.
 
+Natal chart images are uploaded as SVG files to S3-compatible storage. For
+MinIO, configure:
+
+```dotenv
+CHART_IMAGE_S3_ENDPOINT_URL=http://minio:9000
+CHART_IMAGE_S3_REGION=us-east-1
+CHART_IMAGE_S3_BUCKET=natalai-charts
+CHART_IMAGE_S3_ACCESS_KEY_ID=minioadmin
+CHART_IMAGE_S3_SECRET_ACCESS_KEY=minioadmin
+CHART_IMAGE_URL_EXPIRES_SECONDS=86400
+```
+
 The checked-in Docker Compose file injects container-friendly service URLs for PostgreSQL and Redis. If you run the API or worker directly on the host while PostgreSQL/Redis are running in Docker Compose, use localhost-based values:
 
 ```dotenv
@@ -40,14 +52,15 @@ DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/natalai
 CELERY_BROKER_URL=redis://localhost:6379/0
 CELERY_RESULT_BACKEND=redis://localhost:6379/1
 REDIS_URL=redis://localhost:6379/0
+CHART_IMAGE_S3_ENDPOINT_URL=http://localhost:9000
 ```
 
 ## Run With Docker Compose
 
-Start PostgreSQL and Redis:
+Start PostgreSQL, Redis, and MinIO:
 
 ```powershell
-docker compose up -d postgres redis
+docker compose up -d postgres redis minio minio-init
 ```
 
 Run Alembic migrations:

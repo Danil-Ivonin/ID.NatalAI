@@ -48,6 +48,8 @@ class Generation(Base):
         String(32), default=GenerationStatus.PENDING, nullable=False
     )
     natal_xml: Mapped[str | None] = mapped_column(Text)
+    chart_image_object_key: Mapped[str | None] = mapped_column(String(1024))
+    chart_image_mime_type: Mapped[str | None] = mapped_column(String(100))
     astrology_profile_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     result_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     result_text: Mapped[str | None] = mapped_column(Text)

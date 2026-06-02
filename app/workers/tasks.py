@@ -2,14 +2,15 @@ import logging
 from uuid import UUID
 
 import anyio
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.celery_app import celery_app
 from app.core.config import get_settings
-from app.core.database import async_session_factory
 from app.repositories.generation_repository import GenerationRepository
 from app.repositories.persona_repository import PersonaRepository
 from app.repositories.prompt_template_repository import PromptTemplateRepository
 from app.services.ai_generation_service import AIGenerationService
+from app.services.chart_image_storage import ChartImageStorage
 from app.services.natal_chart_service import NatalChartService
 from app.services.openrouter_client import OpenRouterClient
 from app.services.persona_context_service import PostgresPersonaContextProvider
@@ -39,27 +40,33 @@ async def _run_generation(generation_id: str) -> None:
             "openrouter_model_report": getattr(settings, "openrouter_model_report", None),
         },
     )
-    async with async_session_factory() as session:
-        generation_repository = GenerationRepository(session)
-        prompt_template_repository = PromptTemplateRepository(session)
-        persona_repository = PersonaRepository(session)
+    engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+    worker_session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with worker_session_factory() as session:
+            generation_repository = GenerationRepository(session)
+            prompt_template_repository = PromptTemplateRepository(session)
+            persona_repository = PersonaRepository(session)
 
-        async with OpenRouterClient(settings=settings) as openrouter_client:
-            service = AIGenerationService(
-                generation_repository=generation_repository,
-                prompt_template_repository=prompt_template_repository,
-                natal_chart_service=NatalChartService(),
-                prompt_builder=PromptBuilder(),
-                persona_context_provider=PostgresPersonaContextProvider(
-                    persona_repository
-                ),
-                openrouter_client=openrouter_client,
-                settings=settings,
-                commit=session.commit,
-                rollback=session.rollback,
-            )
+            async with OpenRouterClient(settings=settings) as openrouter_client:
+                service = AIGenerationService(
+                    generation_repository=generation_repository,
+                    prompt_template_repository=prompt_template_repository,
+                    natal_chart_service=NatalChartService(),
+                    chart_image_storage=ChartImageStorage(settings),
+                    prompt_builder=PromptBuilder(),
+                    persona_context_provider=PostgresPersonaContextProvider(
+                        persona_repository
+                    ),
+                    openrouter_client=openrouter_client,
+                    settings=settings,
+                    commit=session.commit,
+                    rollback=session.rollback,
+                )
 
-            await service.generate(UUID(generation_id))
+                await service.generate(UUID(generation_id))
+    finally:
+        await engine.dispose()
     logger.info(
         "generation task completed",
         extra={"generation_id": generation_id},

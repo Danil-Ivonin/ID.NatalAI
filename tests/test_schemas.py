@@ -6,12 +6,12 @@ import pytest
 from pydantic import ValidationError
 
 from app.domain.generation.enums import GenerationStatus
+from app.domain.generation.ai_schemas import AstrologyProfile, StyledNatalReport
 from app.domain.generation.schemas import (
     BirthPlace,
     GenerationCreate,
     GenerationDetailResponse,
 )
-from app.domain.generation.ai_schemas import AstrologyProfile, StyledNatalReport
 from app.domain.persona.context import PersonaContext, PersonaContextProvider
 from app.domain.prompts.enums import PromptTemplateType
 from app.domain.prompts.models import PromptTemplate
@@ -87,6 +87,7 @@ def test_generation_detail_response_can_validate_orm_shaped_object() -> None:
         {
             "id": generation_id,
             "status": GenerationStatus.PENDING,
+            "result_json": None,
             "result_text": None,
             "error_message": None,
             "created_at": created_at,
@@ -98,6 +99,39 @@ def test_generation_detail_response_can_validate_orm_shaped_object() -> None:
 
     assert response.generation_id == generation_id
     assert response.created_at == created_at
+
+
+def test_generation_detail_response_returns_styled_report_from_result_json() -> None:
+    generation_id = uuid4()
+    created_at = datetime(2026, 5, 15, tzinfo=timezone.utc)
+    section = {"title": "General", "text": "Text."}
+    result_json = {
+        "title": "Natal report",
+        "intro": section,
+        "general": section,
+        "love_and_sex": section,
+        "career_and_money": section,
+        "demons": section,
+        "final_summary": section,
+    }
+    source = type(
+        "GenerationLike",
+        (),
+        {
+            "id": generation_id,
+            "status": GenerationStatus.COMPLETED,
+            "result_json": result_json,
+            "result_text": "legacy plain text",
+            "error_message": None,
+            "created_at": created_at,
+            "completed_at": created_at,
+        },
+    )()
+
+    response = GenerationDetailResponse.model_validate(source)
+
+    assert isinstance(response.result_text, StyledNatalReport)
+    assert response.result_text.title == "Natal report"
 
 
 def _valid_astrology_profile_payload() -> dict:

@@ -16,6 +16,7 @@ from app.domain.persona.context import PersonaContextProvider
 from app.domain.prompts.enums import PromptTemplateType
 from app.repositories.generation_repository import GenerationRepository
 from app.repositories.prompt_template_repository import PromptTemplateRepository
+from app.services.chart_image_storage import ChartImageStorage
 from app.services.natal_chart_service import NatalChartService
 from app.services.openrouter_client import OpenRouterClient, OpenRouterChatResult
 from app.services.prompt_builder import PromptBuilder
@@ -34,6 +35,7 @@ class AIGenerationService:
         prompt_builder: PromptBuilder,
         persona_context_provider: PersonaContextProvider,
         openrouter_client: OpenRouterClient,
+        chart_image_storage: ChartImageStorage | None = None,
         settings: Settings | None = None,
         commit: Callable[[], Awaitable[None]] | None = None,
         rollback: Callable[[], Awaitable[None]] | None = None,
@@ -41,6 +43,7 @@ class AIGenerationService:
         self.generation_repository = generation_repository
         self.prompt_template_repository = prompt_template_repository
         self.natal_chart_service = natal_chart_service
+        self.chart_image_storage = chart_image_storage
         self.prompt_builder = prompt_builder
         self.persona_context_provider = persona_context_provider
         self.openrouter_client = openrouter_client
@@ -73,6 +76,8 @@ class AIGenerationService:
         stage: GenerationStage | None = None
         model: str | None = None
         template = None
+        template_id: UUID | None = None
+        template_version: int | None = None
         messages: list[dict[str, Any]] | None = None
         response_format: dict[str, Any] | None = None
 
@@ -99,6 +104,8 @@ class AIGenerationService:
                 gender=generation.gender,
                 birth_date=generation.birth_date,
                 birth_time=generation.birth_time,
+                city = generation.birth_city,
+                nation = generation.birth_country,
                 lat=generation.birth_lat,
                 lng=generation.birth_lng,
                 timezone=generation.birth_timezone,
@@ -106,6 +113,19 @@ class AIGenerationService:
             await self.generation_repository.save_natal_xml(
                 generation_id, chart.natal_xml
             )
+            chart_image_object_key = f"generations/{generation_id}/natal-chart.svg"
+            chart_image_mime_type = "image/svg+xml"
+            if self.chart_image_storage is not None:
+                await self.chart_image_storage.upload(
+                    chart_image_object_key,
+                    chart.chart_svg,
+                    chart_image_mime_type,
+                )
+                await self.generation_repository.save_chart_image(
+                    generation_id,
+                    chart_image_object_key,
+                    chart_image_mime_type,
+                )
             logger.info(
                 "natal chart saved",
                 extra={
@@ -115,6 +135,9 @@ class AIGenerationService:
                     "natal_xml_chars": len(chart.natal_xml),
                     "chart_data_available": getattr(chart, "chart_data_json", None)
                     is not None,
+                    "chart_image_object_key": chart_image_object_key
+                    if self.chart_image_storage is not None
+                    else None,
                 },
             )
             await self._create_success_run(
@@ -149,15 +172,17 @@ class AIGenerationService:
             template = await self._active_template(
                 PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION
             )
+            template_id = template.id
+            template_version = template.version
             logger.info(
                 "active prompt template loaded",
                 extra={
                     **self._stage_log_context(
                         generation_id, stage, provider=self.provider, model=model
                     ),
-                    "prompt_template_id": str(template.id),
-                    "prompt_template_version": template.version,
-                    "prompt_template_type": template.type.value,
+                    "prompt_template_id": str(template_id),
+                    "prompt_template_version": template_version,
+                    "prompt_template_type": self._enum_value(template.type),
                 },
             )
             messages = self.prompt_builder.build_astrology_profile_prompt(
@@ -263,15 +288,17 @@ class AIGenerationService:
             template = await self._active_template(
                 PromptTemplateType.STYLED_REPORT_GENERATION
             )
+            template_id = template.id
+            template_version = template.version
             logger.info(
                 "active prompt template loaded",
                 extra={
                     **self._stage_log_context(
                         generation_id, stage, provider=self.provider, model=model
                     ),
-                    "prompt_template_id": str(template.id),
-                    "prompt_template_version": template.version,
-                    "prompt_template_type": template.type.value,
+                    "prompt_template_id": str(template_id),
+                    "prompt_template_version": template_version,
+                    "prompt_template_type": self._enum_value(template.type),
                 },
             )
             messages = self.prompt_builder.build_styled_report_prompt(
@@ -313,11 +340,10 @@ class AIGenerationService:
                 self._parse_json_content(report_result.content)
             )
             report_json = report.model_dump(mode="json")
-            report_text = self._report_text(report)
             await self.generation_repository.save_result(
                 generation_id,
                 report_json,
-                report_text,
+                None,
             )
             logger.info(
                 "styled report saved",
@@ -326,7 +352,6 @@ class AIGenerationService:
                         generation_id, stage, provider=self.provider, model=model
                     ),
                     "report_title": report.title,
-                    "result_text_chars": len(report_text),
                 },
             )
             await self._create_success_run(
@@ -368,7 +393,8 @@ class AIGenerationService:
                     stage=stage,
                     provider=self.provider if stage != GenerationStage.NATAL_CHART_BUILD else "kerykeion",
                     model=model or "local",
-                    template=template,
+                    prompt_template_id=template_id,
+                    prompt_template_version=template_version,
                     raw_request=self._raw_request(model, response_format)
                     if messages is not None
                     else None,
@@ -452,7 +478,8 @@ class AIGenerationService:
         stage: GenerationStage,
         provider: str,
         model: str,
-        template: Any,
+        prompt_template_id: UUID | None,
+        prompt_template_version: int | None,
         raw_request: dict[str, Any] | None,
         error_message: str,
     ) -> None:
@@ -462,8 +489,8 @@ class AIGenerationService:
                 "stage": stage,
                 "provider": provider,
                 "model": model,
-                "prompt_template_id": getattr(template, "id", None),
-                "prompt_template_version": getattr(template, "version", None),
+                "prompt_template_id": prompt_template_id,
+                "prompt_template_version": prompt_template_version,
                 "input_tokens": None,
                 "output_tokens": None,
                 "raw_request": raw_request,
@@ -499,16 +526,3 @@ class AIGenerationService:
             "response_format": response_format,
         }
 
-    @staticmethod
-    def _report_text(report: StyledNatalReport) -> str:
-        parts = [report.title]
-        for section in [
-            report.intro,
-            report.general,
-            report.love_and_sex,
-            report.career_and_money,
-            report.demons,
-            report.final_summary,
-        ]:
-            parts.append(f"{section.title}\n{section.text}")
-        return "\n\n".join(parts)
