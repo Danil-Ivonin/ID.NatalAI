@@ -176,8 +176,8 @@ def test_get_generation(client) -> None:
         status=GenerationStatus.COMPLETED,
         result_json=styled_report_payload(),
         result_text="legacy plain text",
-        chart_image_object_key=f"generations/{generation_id}/natal-chart.svg",
-        chart_image_mime_type="image/svg+xml",
+        chart_image_object_key=f"generations/{generation_id}/natal-chart.png",
+        chart_image_mime_type="image/png",
         error_message=None,
         created_at=datetime(2026, 5, 17, 10, 0, tzinfo=UTC),
         completed_at=datetime(2026, 5, 17, 10, 1, tzinfo=UTC),
@@ -193,9 +193,9 @@ def test_get_generation(client) -> None:
         "chart_image": {
             "url": (
                 "https://storage.test/"
-                f"generations/{generation_id}/natal-chart.svg?signature=test"
+                f"generations/{generation_id}/natal-chart.png?signature=test"
             ),
-            "mime_type": "image/svg+xml",
+            "mime_type": "image/png",
         },
         "error_message": None,
         "created_at": "2026-05-17T10:00:00Z",

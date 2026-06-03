@@ -33,7 +33,7 @@ OPENROUTER_API_KEY=your-real-openrouter-key
 rendered without a `.env`, but the worker/OpenRouter client fails fast before
 generation if the key is empty.
 
-Natal chart images are uploaded as SVG files to S3-compatible storage. For
+Natal chart images are converted from SVG to PNG and uploaded to S3-compatible storage. For
 MinIO, configure:
 
 ```dotenv

@@ -524,7 +524,9 @@ async def test_ai_generation_service_rolls_back_before_persisting_failure() -> N
 
 
 @pytest.mark.asyncio
-async def test_ai_generation_service_successful_orchestration_records_outputs_and_runs() -> None:
+async def test_ai_generation_service_successful_orchestration_records_outputs_and_runs(
+    monkeypatch,
+) -> None:
     from app.services.ai_generation_service import AIGenerationService
 
     generation = FakeGeneration()
@@ -532,6 +534,12 @@ async def test_ai_generation_service_successful_orchestration_records_outputs_an
     chart_image_storage = FakeChartImageStorage()
     openrouter_client = SuccessfulOpenRouterClient()
     settings = FakeSettings(openrouter_api_key="sk-secret-test")
+    chart_png = b"\x89PNG\r\n\x1a\nconverted-chart"
+    monkeypatch.setattr(
+        AIGenerationService,
+        "_chart_svg_to_png",
+        staticmethod(lambda chart_svg: chart_png),
+    )
 
     await AIGenerationService(
         generation_repository=generation_repository,
@@ -548,15 +556,15 @@ async def test_ai_generation_service_successful_orchestration_records_outputs_an
     assert generation_repository.natal_xml == [(generation.id, "<chart />")]
     assert chart_image_storage.uploads == [
         (
-            f"generations/{generation.id}/natal-chart.svg",
-            b"<svg>chart</svg>",
-            "image/svg+xml",
+            f"generations/{generation.id}/natal-chart.png",
+            chart_png,
+            "image/png",
         )
     ]
     assert generation_repository.chart_image == (
         generation.id,
-        f"generations/{generation.id}/natal-chart.svg",
-        "image/svg+xml",
+        f"generations/{generation.id}/natal-chart.png",
+        "image/png",
     )
     assert AstrologyProfile.model_validate(generation_repository.profile[1])
     assert generation_repository.result[1]["title"] == "Natal report"
@@ -582,6 +590,44 @@ async def test_ai_generation_service_successful_orchestration_records_outputs_an
     for call in openrouter_client.results:
         assert not hasattr(call, "raw_request")
         assert "sk-secret-test" not in _stringify(call.raw_response)
+
+
+def test_ai_generation_service_converts_chart_svg_to_png_with_cairosvg(
+    monkeypatch,
+) -> None:
+    from app.services import ai_generation_service
+    from app.services.ai_generation_service import AIGenerationService
+
+    calls = []
+
+    class FakeCairoSVG:
+        @staticmethod
+        def svg2png(**kwargs):
+            calls.append(kwargs)
+            return b"\x89PNG\r\n\x1a\nconverted-chart"
+
+    monkeypatch.setattr(
+        ai_generation_service,
+        "import_module",
+        lambda module_name: FakeCairoSVG if module_name == "cairosvg" else None,
+    )
+
+    chart_svg = (
+        "<svg xmlns='http://www.w3.org/2000/svg' "
+        "style='background-color: #0f172a'></svg>"
+    )
+
+    assert AIGenerationService._chart_svg_to_png(chart_svg) == (
+        b"\x89PNG\r\n\x1a\nconverted-chart"
+    )
+    assert calls == [
+        {
+            "bytestring": chart_svg.encode("utf-8"),
+            "output_width": 1920,
+            "output_height": 1080,
+            "background_color": "#0f172a",
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -783,7 +829,11 @@ class ExpiringPromptRepository:
 
 class FakeNatalChartResult:
     natal_xml = "<chart />"
-    chart_svg = b"<svg>chart</svg>"
+    chart_svg = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">'
+        b'<rect width="100" height="100" fill="white"/>'
+        b"</svg>"
+    )
 
 
 class FakeNatalChartService:

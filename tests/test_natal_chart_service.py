@@ -39,7 +39,8 @@ def test_build_natal_chart_uses_kerykeion_birth_data_and_xml_context(monkeypatch
         def __init__(self, **kwargs):
             captured_drawer.update(kwargs)
 
-        def generate_svg_string(self):
+        def generate_svg_string(self, **kwargs):
+            captured_drawer["generate_svg_string_kwargs"] = kwargs
             return "<svg>chart</svg>"
 
     monkeypatch.setattr(
@@ -65,13 +66,14 @@ def test_build_natal_chart_uses_kerykeion_birth_data_and_xml_context(monkeypatch
 
     assert result.natal_xml == "<natal>xml</natal>"
     assert result.chart_data_json == {"chart": {"subject": "Natasha"}}
-    assert result.chart_svg == b"<svg>chart</svg>"
+    assert result.chart_svg == "<svg>chart</svg>"
     assert captured_drawer == {
         "chart_data": {"chart": {"subject": "Natasha"}},
         "chart_language": "RU",
         "show_zodiac_background_ring": True,
         "style": "modern",
         "theme": "dark",
+        "generate_svg_string_kwargs": {"remove_css_variables": True},
     }
     assert captured_birth_data == {
         "name": "Natasha",
@@ -121,7 +123,11 @@ def test_build_natal_chart_uses_anonymous_fallback_for_missing_name(monkeypatch)
         lambda **kwargs: type(
             "FakeChartDrawer",
             (),
-            {"generate_svg_string": lambda self: "<svg>anonymous</svg>"},
+            {
+                "generate_svg_string": lambda self, **kwargs: (
+                    "<svg>anonymous</svg>"
+                )
+            },
         )(),
     )
 
@@ -137,4 +143,4 @@ def test_build_natal_chart_uses_anonymous_fallback_for_missing_name(monkeypatch)
 
     assert captured_birth_data["name"] == "Anonymous"
     assert result.natal_xml == "<anonymous />"
-    assert result.chart_svg == b"<svg>anonymous</svg>"
+    assert result.chart_svg == "<svg>anonymous</svg>"

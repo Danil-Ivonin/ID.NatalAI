@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class NatalChartResult:
     natal_xml: str
-    chart_svg: bytes
+    chart_svg: str
     chart_data_json: dict[str, Any] | None = None
 
 
@@ -76,7 +76,7 @@ class NatalChartService:
         )
 
     @staticmethod
-    def _draw_chart_svg(chart_data: Any) -> bytes:
+    def _draw_chart_svg(chart_data: Any) -> str:
         drawer = ChartDrawer(
             chart_data=chart_data,
             chart_language="RU",
@@ -84,8 +84,8 @@ class NatalChartService:
             style="modern",
             theme="dark",
         )
-        svg = drawer.generate_svg_string()
-        return svg.encode("utf-8") if isinstance(svg, str) else svg
+        svg = drawer.generate_svg_string(remove_css_variables=True)
+        return svg
 
     @staticmethod
     def _to_json_dict(chart_data: Any) -> dict[str, Any] | None:

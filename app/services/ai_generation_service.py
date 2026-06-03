@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
+from importlib import import_module
 from typing import Any
 from uuid import UUID
+from xml.etree import ElementTree
 
 import orjson
 from pydantic import BaseModel
@@ -109,12 +111,13 @@ class AIGenerationService:
             await self.generation_repository.save_natal_xml(
                 generation_id, chart.natal_xml
             )
-            chart_image_object_key = f"generations/{generation_id}/natal-chart.svg"
-            chart_image_mime_type = "image/svg+xml"
+            chart_image_object_key = f"generations/{generation_id}/natal-chart.png"
+            chart_image_mime_type = "image/png"
             if self.chart_image_storage is not None:
+                chart_png = self._chart_svg_to_png(chart.chart_svg)
                 await self.chart_image_storage.upload(
                     chart_image_object_key,
-                    chart.chart_svg,
+                    chart_png,
                     chart_image_mime_type,
                 )
                 await self.generation_repository.save_chart_image(
@@ -499,6 +502,34 @@ class AIGenerationService:
     @staticmethod
     def _parse_json_content(content: str) -> Any:
         return orjson.loads(content)
+
+    @staticmethod
+    def _chart_svg_to_png(chart_svg: str) -> bytes:
+        cairosvg = import_module("cairosvg")
+        chart_svg_bytes = (
+            chart_svg.encode("utf-8") if isinstance(chart_svg, str) else chart_svg
+        )
+        return cairosvg.svg2png(
+            bytestring=chart_svg_bytes,
+            output_width=1920,
+            output_height=1080,
+            background_color=AIGenerationService._chart_svg_background_color(
+                chart_svg_bytes
+            ),
+        )
+
+    @staticmethod
+    def _chart_svg_background_color(chart_svg: str | bytes) -> str | None:
+        chart_svg_bytes = (
+            chart_svg.encode("utf-8") if isinstance(chart_svg, str) else chart_svg
+        )
+        root = ElementTree.fromstring(chart_svg_bytes)
+        style = root.attrib.get("style", "")
+        for declaration in style.split(";"):
+            property_name, separator, value = declaration.partition(":")
+            if separator and property_name.strip().lower() == "background-color":
+                return value.strip() or None
+        return None
 
     @staticmethod
     def _json_schema_response_format(model: type[BaseModel]) -> dict[str, Any]:
