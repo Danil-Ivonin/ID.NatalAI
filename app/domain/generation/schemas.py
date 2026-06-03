@@ -8,8 +8,6 @@ from app.domain.generation.enums import Gender, GenerationStatus
 
 
 class BirthPlace(BaseModel):
-    city: str
-    country: str
     lat: float
     lng: float
     timezone: str

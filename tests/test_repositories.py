@@ -117,7 +117,6 @@ def test_repository_methods_are_async_contracts() -> None:
         "update",
         "get",
         "list",
-        "get_active",
         "get_context_persona",
         "get_style_profile",
         "list_allowed_quotes",
@@ -150,8 +149,6 @@ async def test_generation_create_flattens_birth_place_and_starts_pending() -> No
             birth_date=date(1990, 1, 2),
             birth_time=time(3, 4),
             birth_place=BirthPlace(
-                city="Moscow",
-                country="Russia",
                 lat=55.7558,
                 lng=37.6173,
                 timezone="Europe/Moscow",
@@ -164,8 +161,6 @@ async def test_generation_create_flattens_birth_place_and_starts_pending() -> No
     assert session.flushed == 1
     assert session.refreshed == [generation]
     assert generation.persona_id == persona_id
-    assert generation.birth_city == "Moscow"
-    assert generation.birth_country == "Russia"
     assert generation.birth_lat == 55.7558
     assert generation.birth_lng == 37.6173
     assert generation.birth_timezone == "Europe/Moscow"
@@ -182,8 +177,6 @@ async def test_generation_save_result_sets_completed_state() -> None:
         gender=None,
         birth_date=date(1990, 1, 2),
         birth_time=time(3, 4),
-        birth_city="Moscow",
-        birth_country="Russia",
         birth_lat=55.7558,
         birth_lng=37.6173,
         birth_timezone="Europe/Moscow",
@@ -215,8 +208,8 @@ async def test_persona_create_builds_nested_context_data(monkeypatch) -> None:
 
     persona = await repository.create(
         PersonaCreate(
-            name="Shrek",
-            slug="shrek",
+            name="Roast Persona",
+            slug="roast-persona",
             description="Direct fairy tale swamp wisdom.",
             style_profile=PersonaStyleProfileCreate(
                 voice_description="Blunt, warm, and impatient.",
@@ -271,10 +264,9 @@ async def test_persona_context_loading_methods_execute_queries_and_return_result
     persona_id = uuid4()
     persona = Persona(
         id=persona_id,
-        name="Shrek",
-        slug="shrek",
+        name="Roast Persona",
+        slug="roast-persona",
         description="Direct swamp wisdom.",
-        is_active=True,
     )
     style_profile = PersonaStyleProfile(
         persona_id=persona_id,
@@ -322,7 +314,6 @@ async def test_persona_context_loading_methods_execute_queries_and_return_result
     assert len(session.executed) == 5
     compiled_queries = [str(statement) for statement in session.executed]
     assert "FROM personas" in compiled_queries[0]
-    assert "personas.is_active IS true" in compiled_queries[0]
     assert "FROM persona_style_profiles" in compiled_queries[1]
     assert "FROM persona_quotes" in compiled_queries[2]
     assert "persona_quotes.is_allowed IS true" in compiled_queries[2]
@@ -368,7 +359,7 @@ async def test_prompt_template_create_uses_metadata_alias() -> None:
 
     assert session.added == [template]
     assert template.template_metadata == {"model": "test-model"}
-    assert template.is_active is True
+    assert template.is_current is True
 
 
 @pytest.mark.asyncio
@@ -384,12 +375,12 @@ async def test_prompt_template_create_active_bulk_deactivates_before_insert() ->
             type=PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION,
             version=2,
             content="new",
-            is_active=True,
+            is_current=True,
             metadata={},
         )
     )
 
-    assert created.is_active is True
+    assert created.is_current is True
     assert [operation for operation, _ in session.operations] == [
         "execute",
         "flush",
@@ -401,7 +392,7 @@ async def test_prompt_template_create_active_bulk_deactivates_before_insert() ->
     assert deactivation_statement.is_update
     compiled = str(deactivation_statement.compile(compile_kwargs={"literal_binds": True}))
     assert compiled.startswith("UPDATE prompt_templates")
-    assert "is_active=false" in compiled
+    assert "is_current=false" in compiled
 
 
 @pytest.mark.asyncio
@@ -416,7 +407,7 @@ async def test_prompt_activate_bulk_deactivates_and_flushes_before_target_activa
         type=PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION,
         version=2,
         content="new",
-        is_active=False,
+        is_current=False,
         template_metadata={},
     )
     session = FakePromptWriteSession()
@@ -430,7 +421,7 @@ async def test_prompt_activate_bulk_deactivates_and_flushes_before_target_activa
     activated = await repository.activate(target.id)
 
     assert activated is target
-    assert target.is_active is True
+    assert target.is_current is True
     assert [operation for operation, _ in session.operations] == [
         "execute",
         "flush",
@@ -441,7 +432,7 @@ async def test_prompt_activate_bulk_deactivates_and_flushes_before_target_activa
     assert deactivation_statement.is_update
     compiled = str(deactivation_statement.compile(compile_kwargs={"literal_binds": True}))
     assert compiled.startswith("UPDATE prompt_templates")
-    assert "is_active=false" in compiled
+    assert "is_current=false" in compiled
     assert "prompt_templates.id !=" in compiled
 
 
@@ -459,7 +450,7 @@ async def test_prompt_template_activation_persists_single_active_template(
             type=PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION,
             version=1,
             content="old",
-            is_active=True,
+            is_current=True,
             metadata={},
         )
     )
@@ -469,7 +460,7 @@ async def test_prompt_template_activation_persists_single_active_template(
             type=PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION,
             version=2,
             content="new",
-            is_active=False,
+            is_current=False,
             metadata={},
         )
     )
@@ -482,7 +473,7 @@ async def test_prompt_template_activation_persists_single_active_template(
 
     assert active is not None
     assert active.id == second.id
-    assert {template.id: template.is_active for template in templates} == {
+    assert {template.id: template.is_current for template in templates} == {
         first.id: False,
         second.id: True,
     }
@@ -516,8 +507,6 @@ async def test_generation_status_transitions_persist_in_db(db_session) -> None:
             birth_date=date(1990, 1, 2),
             birth_time=time(3, 4),
             birth_place=BirthPlace(
-                city="Moscow",
-                country="Russia",
                 lat=55.7558,
                 lng=37.6173,
                 timezone="Europe/Moscow",

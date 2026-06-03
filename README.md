@@ -69,12 +69,6 @@ Run Alembic migrations:
 docker compose run --rm app alembic upgrade head
 ```
 
-Seed prompt templates and the initial persona data:
-
-```powershell
-docker compose run --rm app python -m app.db.seed
-```
-
 Start the API and worker:
 
 ```powershell
@@ -91,17 +85,16 @@ Install/sync dependencies:
 uv sync
 ```
 
-Start only PostgreSQL and Redis in Docker Compose:
+Start only PostgreSQL, Redis, and MinIO in Docker Compose:
 
 ```powershell
-docker compose up -d postgres redis
+docker compose up -d postgres redis minio minio-init
 ```
 
-Make sure `.env` uses localhost URLs for host-run processes, then run migrations and seed data:
+Make sure `.env` uses localhost URLs for host-run processes, then run migrations:
 
 ```powershell
 uv run alembic upgrade head
-uv run python -m app.db.seed
 ```
 
 Start the API:
@@ -118,7 +111,7 @@ uv run celery -A app.core.celery_app.celery_app worker --loglevel=info
 
 ## Generation Endpoint
 
-List seeded personas and copy an active persona `id`:
+Create or list personas and copy the persona `id` to use for this generation:
 
 ```powershell
 curl.exe http://localhost:8000/api/v1/personas
@@ -135,8 +128,6 @@ curl.exe -X POST http://localhost:8000/api/v1/generations `
     "birth_date": "1994-04-12",
     "birth_time": "08:30:00",
     "birth_place": {
-      "city": "Moscow",
-      "country": "RU",
       "lat": 55.7558,
       "lng": 37.6173,
       "timezone": "Europe/Moscow"
@@ -165,7 +156,6 @@ Useful targeted checks:
 
 ```powershell
 uv run python -m py_compile app/main.py app/core/config.py app/services/prompt_builder.py app/workers/tasks.py
-uv run python -m app.db.seed --dry-run
 docker compose config
 ```
 
@@ -174,9 +164,9 @@ docker compose config
 - `app/main.py`: FastAPI application setup and API router registration.
 - `app/api/v1/`: HTTP endpoints for personas, prompt templates, and generation jobs.
 - `app/core/`: configuration, logging, database session setup, Celery app, and shared exceptions.
-- `app/db/`: SQLAlchemy models, Alembic migrations, and seed script.
+- `app/db/`: SQLAlchemy models and Alembic migrations.
 - `app/domain/`: Pydantic schemas, enums, and domain models for personas, prompts, and generations.
 - `app/repositories/`: database access layer for personas, prompt templates, and generations.
 - `app/services/`: natal chart generation, prompt building, OpenRouter calls, persona context assembly, and AI generation orchestration.
 - `app/workers/`: Celery tasks that process generation jobs asynchronously.
-- `tests/`: unit, API, worker, seed, and optional PostgreSQL integration tests.
+- `tests/`: unit, API, worker, and optional PostgreSQL integration tests.

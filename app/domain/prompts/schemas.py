@@ -14,7 +14,7 @@ class PromptTemplateBase(BaseModel):
     type: PromptTemplateType
     version: int
     content: str
-    is_active: bool = True
+    is_current: bool = True
     template_metadata: dict[str, Any] = Field(
         default_factory=dict,
         validation_alias=AliasChoices("template_metadata", "metadata"),

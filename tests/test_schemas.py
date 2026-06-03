@@ -13,6 +13,7 @@ from app.domain.generation.schemas import (
     GenerationDetailResponse,
 )
 from app.domain.persona.context import PersonaContext, PersonaContextProvider
+from app.domain.persona.schemas import PersonaCreate
 from app.domain.prompts.enums import PromptTemplateType
 from app.domain.prompts.models import PromptTemplate
 from app.domain.prompts.schemas import PromptTemplateActivateResponse, PromptTemplateRead
@@ -23,8 +24,6 @@ def test_generation_create_accepts_missing_person_name_and_null_gender() -> None
         "birth_date": date(1990, 1, 2),
         "birth_time": time(3, 4),
         "birth_place": {
-            "city": "Moscow",
-            "country": "Russia",
             "lat": 55.7558,
             "lng": 37.6173,
             "timezone": "Europe/Moscow",
@@ -36,7 +35,6 @@ def test_generation_create_accepts_missing_person_name_and_null_gender() -> None
 
     assert model.person_name is None
     assert model.gender is None
-    assert model.birth_place.city == "Moscow"
 
 
 def test_generation_create_accepts_explicit_null_person_name_and_gender() -> None:
@@ -46,8 +44,6 @@ def test_generation_create_accepts_explicit_null_person_name_and_gender() -> Non
         birth_date=date(1990, 1, 2),
         birth_time=time(3, 4),
         birth_place=BirthPlace(
-            city="Moscow",
-            country="Russia",
             lat=55.7558,
             lng=37.6173,
             timezone="Europe/Moscow",
@@ -68,8 +64,6 @@ def test_generation_create_rejects_invalid_gender(gender: str) -> None:
             birth_date=date(1990, 1, 2),
             birth_time=time(3, 4),
             birth_place=BirthPlace(
-                city="Moscow",
-                country="Russia",
                 lat=55.7558,
                 lng=37.6173,
                 timezone="Europe/Moscow",
@@ -248,8 +242,6 @@ def _valid_astrology_profile_payload() -> dict:
             "main_strength": "decisiveness",
             "main_weakness": "reactivity",
             "best_humor_angles": ["roast the impatience"],
-            "sensitive_topics_to_avoid": ["health"],
-            "recommended_tone": "sharp but not cruel",
         },
     }
 
@@ -266,6 +258,15 @@ def test_astrology_profile_rejects_extra_fields_and_requires_evidence() -> None:
 
     with pytest.raises(ValidationError):
         AstrologyProfile.model_validate(invalid_missing_evidence)
+
+
+def test_astrology_profile_rejects_removed_generation_brief_fields() -> None:
+    payload = _valid_astrology_profile_payload()
+    payload["generation_brief"]["sensitive_topics_to_avoid"] = ["health"]
+    payload["generation_brief"]["recommended_tone"] = "sharp but not cruel"
+
+    with pytest.raises(ValidationError):
+        AstrologyProfile.model_validate(payload)
 
 
 def test_styled_natal_report_rejects_extra_fields() -> None:
@@ -286,26 +287,16 @@ def test_styled_natal_report_rejects_extra_fields() -> None:
         StyledNatalReport.model_validate(payload | {"extra": "nope"})
 
 
-def test_persona_context_schema_and_provider_protocol_shape() -> None:
-    context = PersonaContext(
-        persona_name="Shrek",
-        persona_slug="shrek",
-        persona_description=None,
-        voice_description="Direct.",
-        humor_style="Dry.",
-        speech_patterns=["short sentences"],
-        allowed_rules=["roast lightly"],
-        forbidden_rules=["no hate"],
-        allowed_quotes=["Better out than in."],
-        phrase_templates=["{subject}, listen."],
-        style_examples=["That is a terrible idea."],
-    )
-
-    assert context.allowed_quotes == ["Better out than in."]
-    assert issubclass(PersonaContextProvider, Protocol)
-
+def test_persona_create_rejects_removed_status_flag() -> None:
     with pytest.raises(ValidationError):
-        PersonaContext.model_validate(context.model_dump() | {"extra": "nope"})
+        PersonaCreate.model_validate(
+            {
+                "name": "Roast Persona",
+                "slug": "roast-persona",
+                "description": None,
+                "status_flag": True,
+            }
+        )
 
 
 def test_prompt_template_activate_response_exposes_read_fields_and_metadata_alias() -> None:
@@ -321,7 +312,7 @@ def test_prompt_template_activate_response_exposes_read_fields_and_metadata_alia
             "type": PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION,
             "version": 1,
             "content": "Extract profile",
-            "is_active": True,
+            "is_current": True,
             "template_metadata": {"model": "test-model"},
             "created_at": created_at,
             "updated_at": updated_at,
@@ -349,7 +340,7 @@ def test_prompt_template_read_prefers_orm_template_metadata_over_sqlalchemy_meta
         type=PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION,
         version=2,
         content="Extract profile",
-        is_active=True,
+        is_current=True,
         template_metadata={"model": "test-model"},
     )
     source.created_at = created_at

@@ -14,7 +14,7 @@ class PostgresPersonaContextProvider:
     async def get_context(self, persona_id: UUID) -> PersonaContext:
         persona = await self.repository.get_context_persona(persona_id)
         if persona is None:
-            raise NotFoundError(f"Active persona not found: {persona_id}")
+            raise NotFoundError(f"Persona not found: {persona_id}")
 
         style_profile = await self.repository.get_style_profile(persona_id)
         if style_profile is None:

@@ -24,7 +24,6 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("slug", sa.String(length=255), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -48,7 +47,7 @@ def upgrade() -> None:
         sa.Column("type", sa.String(length=64), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
-        sa.Column("is_active", sa.Boolean(), nullable=False),
+        sa.Column("is_current", sa.Boolean(), nullable=False),
         sa.Column("metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column(
             "created_at",
@@ -65,17 +64,17 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        "ix_prompt_templates_type_active",
+        "ix_prompt_templates_type_current",
         "prompt_templates",
-        ["type", "is_active"],
+        ["type", "is_current"],
         unique=False,
     )
     op.create_index(
-        "ix_prompt_templates_one_active_per_type",
+        "ix_prompt_templates_one_current_per_type",
         "prompt_templates",
         ["type"],
         unique=True,
-        postgresql_where=sa.text("is_active IS true"),
+        postgresql_where=sa.text("is_current IS true"),
     )
 
     op.create_table(
@@ -180,14 +179,14 @@ def upgrade() -> None:
         sa.Column("gender", sa.String(length=16), nullable=True),
         sa.Column("birth_date", sa.Date(), nullable=False),
         sa.Column("birth_time", sa.Time(), nullable=False),
-        sa.Column("birth_city", sa.String(length=255), nullable=False),
-        sa.Column("birth_country", sa.String(length=255), nullable=False),
         sa.Column("birth_lat", sa.Float(), nullable=False),
         sa.Column("birth_lng", sa.Float(), nullable=False),
         sa.Column("birth_timezone", sa.String(length=255), nullable=False),
         sa.Column("persona_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("natal_xml", sa.Text(), nullable=True),
+        sa.Column("chart_image_object_key", sa.String(length=1024), nullable=True),
+        sa.Column("chart_image_mime_type", sa.String(length=100), nullable=True),
         sa.Column("astrology_profile_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("result_json", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("result_text", sa.Text(), nullable=True),
@@ -252,8 +251,8 @@ def downgrade() -> None:
     op.drop_table("persona_style_examples")
     op.drop_table("persona_quotes")
     op.drop_table("persona_phrase_templates")
-    op.drop_index("ix_prompt_templates_one_active_per_type", table_name="prompt_templates")
-    op.drop_index("ix_prompt_templates_type_active", table_name="prompt_templates")
+    op.drop_index("ix_prompt_templates_one_current_per_type", table_name="prompt_templates")
+    op.drop_index("ix_prompt_templates_type_current", table_name="prompt_templates")
     op.drop_table("prompt_templates")
     op.drop_index("ix_personas_slug", table_name="personas")
     op.drop_table("personas")

@@ -22,8 +22,6 @@ class GenerationRepository:
             gender=data.gender,
             birth_date=data.birth_date,
             birth_time=data.birth_time,
-            birth_city=data.birth_place.city,
-            birth_country=data.birth_place.country,
             birth_lat=data.birth_place.lat,
             birth_lng=data.birth_place.lng,
             birth_timezone=data.birth_place.timezone,

@@ -35,7 +35,6 @@ class PersonaRepository:
             name=data.name,
             slug=data.slug,
             description=data.description,
-            is_active=data.is_active,
             style_profile=(
                 PersonaStyleProfile(**data.style_profile.model_dump())
                 if data.style_profile is not None
@@ -99,20 +98,8 @@ class PersonaRepository:
         result = await self.session.execute(statement)
         return list(result.scalars().all())
 
-    async def get_active(self, persona_id: UUID) -> Persona | None:
-        statement = (
-            select(Persona)
-            .where(Persona.id == persona_id, Persona.is_active.is_(True))
-            .options(*self._read_options())
-        )
-        result = await self.session.execute(statement)
-        return result.scalar_one_or_none()
-
     async def get_context_persona(self, persona_id: UUID) -> Persona | None:
-        statement = select(Persona).where(
-            Persona.id == persona_id,
-            Persona.is_active.is_(True),
-        )
+        statement = select(Persona).where(Persona.id == persona_id)
         result = await self.session.execute(statement)
         return result.scalar_one_or_none()
 

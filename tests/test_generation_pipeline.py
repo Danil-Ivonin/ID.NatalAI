@@ -138,8 +138,6 @@ def _profile_payload() -> dict:
             "main_strength": "decisiveness",
             "main_weakness": "reactivity",
             "best_humor_angles": ["roast impatience"],
-            "sensitive_topics_to_avoid": ["health"],
-            "recommended_tone": "sharp but not cruel",
         },
     }
 
@@ -176,7 +174,7 @@ def _stringify(value) -> str:
 
 
 @pytest.mark.asyncio
-async def test_postgres_persona_context_provider_loads_active_context() -> None:
+async def test_postgres_persona_context_provider_loads_context() -> None:
     from app.services.persona_context_service import PostgresPersonaContextProvider
 
     persona_id = uuid4()
@@ -630,7 +628,6 @@ class FakePersonaRepository:
             name="Ada Persona",
             slug="ada",
             description="Sharp persona.",
-            is_active=True,
         )
 
     async def get_style_profile(self, persona_id):
@@ -683,8 +680,6 @@ class FakeGeneration:
         self.gender = "female"
         self.birth_date = date(1990, 1, 2)
         self.birth_time = time(3, 4)
-        self.birth_city = "Moscow"
-        self.birth_country = "Russia"
         self.birth_lat = 55.7558
         self.birth_lng = 37.6173
         self.birth_timezone = "Europe/Moscow"
@@ -753,7 +748,7 @@ class FakePromptRepository:
             type=template_type.value if self.type_as_string else template_type,
             version=1,
             content=f"{template_type.value} template",
-            is_active=True,
+            is_current=True,
             template_metadata={},
         )
 

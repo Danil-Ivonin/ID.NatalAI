@@ -23,17 +23,17 @@ class PromptTemplate(Base):
     type: Mapped[PromptTemplateType] = mapped_column(String(64), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_current: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     template_metadata: Mapped[dict[str, Any]] = mapped_column(
         "metadata", JSONB, nullable=False
     )
     __table_args__ = (
-        Index("ix_prompt_templates_type_active", "type", "is_active"),
+        Index("ix_prompt_templates_type_current", "type", "is_current"),
         Index(
-            "ix_prompt_templates_one_active_per_type",
+            "ix_prompt_templates_one_current_per_type",
             "type",
             unique=True,
-            postgresql_where=is_active.is_(True),
+            postgresql_where=is_current.is_(True),
         ),
     )
     created_at: Mapped[datetime] = mapped_column(

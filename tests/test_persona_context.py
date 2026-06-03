@@ -51,7 +51,7 @@ async def test_persona_context_provider_loads_repository_context_from_db(
     slug = f"context-{uuid4().hex}"
     persona = await repository.create(
         PersonaCreate(
-            name="Shrek",
+            name="Roast Persona",
             slug=slug,
             description="Direct fairy tale swamp wisdom.",
             style_profile=PersonaStyleProfileCreate(
@@ -95,7 +95,7 @@ async def test_persona_context_provider_loads_repository_context_from_db(
 
     context = await provider.get_context(persona.id)
 
-    assert context.persona_name == "Shrek"
+    assert context.persona_name == "Roast Persona"
     assert context.allowed_quotes == ["Better out than in."]
     assert "Forbidden quote." not in context.allowed_quotes
     assert context.phrase_templates == ["{subject}, listen."]

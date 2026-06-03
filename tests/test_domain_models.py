@@ -26,17 +26,17 @@ def test_domain_metadata_contains_task_two_tables_and_indexes() -> None:
     persona_style_profiles = Base.metadata.tables["persona_style_profiles"]
 
     assert "ix_personas_slug" in {index.name for index in personas.indexes}
-    assert "ix_prompt_templates_type_active" in {
+    assert "ix_prompt_templates_type_current" in {
         index.name for index in prompt_templates.indexes
     }
-    one_active_index = next(
+    one_current_index = next(
         index
         for index in prompt_templates.indexes
-        if index.name == "ix_prompt_templates_one_active_per_type"
+        if index.name == "ix_prompt_templates_one_current_per_type"
     )
-    assert one_active_index.unique is True
-    assert str(one_active_index.dialect_options["postgresql"]["where"]) == (
-        "prompt_templates.is_active IS true"
+    assert one_current_index.unique is True
+    assert str(one_current_index.dialect_options["postgresql"]["where"]) == (
+        "prompt_templates.is_current IS true"
     )
     assert "ix_generations_status" in {index.name for index in generations.indexes}
     assert "ix_generation_runs_generation_id" in {
@@ -58,7 +58,7 @@ def test_model_registry_import_configures_relationship_mappers() -> None:
 
     configure_mappers()
 
-    assert Persona(name="Shrek", slug="shrek").slug == "shrek"
+    assert Persona(name="Roast Persona", slug="roast-persona").slug == "roast-persona"
     assert PromptTemplate(
         name="Report",
         type="styled_report_generation",

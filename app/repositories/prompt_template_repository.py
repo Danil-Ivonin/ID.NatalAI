@@ -16,8 +16,8 @@ class PromptTemplateRepository:
         self.session = session
 
     async def create(self, data: PromptTemplateCreate) -> PromptTemplate:
-        if data.is_active:
-            await self._deactivate_active_templates(data.type)
+        if data.is_current:
+            await self._clear_current_templates(data.type)
             await self.session.flush()
 
         template = PromptTemplate(**data.model_dump())
@@ -45,7 +45,7 @@ class PromptTemplateRepository:
     ) -> PromptTemplate | None:
         statement = select(PromptTemplate).where(
             PromptTemplate.type == template_type,
-            PromptTemplate.is_active.is_(True),
+            PromptTemplate.is_current.is_(True),
         )
         result = await self.session.execute(statement)
         return result.scalar_one_or_none()
@@ -55,14 +55,14 @@ class PromptTemplateRepository:
         if target is None:
             return None
 
-        await self._deactivate_active_templates(target.type, exclude_id=target.id)
+        await self._clear_current_templates(target.type, exclude_id=target.id)
         await self.session.flush()
-        target.is_active = True
+        target.is_current = True
         await self.session.flush()
         await self.session.refresh(target)
         return target
 
-    async def _deactivate_active_templates(
+    async def _clear_current_templates(
         self,
         template_type: PromptTemplateType,
         exclude_id: UUID | None = None,
@@ -71,9 +71,9 @@ class PromptTemplateRepository:
             update(PromptTemplate)
             .where(
                 PromptTemplate.type == template_type,
-                PromptTemplate.is_active.is_(True),
+                PromptTemplate.is_current.is_(True),
             )
-            .values(is_active=False)
+            .values(is_current=False)
         )
         if exclude_id is not None:
             statement = statement.where(PromptTemplate.id != exclude_id)

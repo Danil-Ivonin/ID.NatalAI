@@ -68,8 +68,6 @@ class AIGenerationService:
                 "status": self._enum_value(getattr(generation, "status", None)),
                 "has_person_name": generation.person_name is not None,
                 "gender_provided": generation.gender is not None,
-                "birth_city": generation.birth_city,
-                "birth_country": generation.birth_country,
                 "birth_timezone": generation.birth_timezone,
             },
         )
@@ -104,8 +102,6 @@ class AIGenerationService:
                 gender=generation.gender,
                 birth_date=generation.birth_date,
                 birth_time=generation.birth_time,
-                city = generation.birth_city,
-                nation = generation.birth_country,
                 lat=generation.birth_lat,
                 lng=generation.birth_lng,
                 timezone=generation.birth_timezone,
@@ -269,7 +265,7 @@ class AIGenerationService:
                 generation.persona_id
             )
             logger.info(
-                "persona context loaded",
+                f"persona context loaded: {generation.persona_id}",
                 extra={
                     **self._stage_log_context(
                         generation_id, stage, provider=self.provider, model=model
@@ -291,7 +287,7 @@ class AIGenerationService:
             template_id = template.id
             template_version = template.version
             logger.info(
-                "active prompt template loaded",
+                f"active prompt template loaded: {template.id}",
                 extra={
                     **self._stage_log_context(
                         generation_id, stage, provider=self.provider, model=model
@@ -525,4 +521,3 @@ class AIGenerationService:
             "messages": "[redacted]",
             "response_format": response_format,
         }
-

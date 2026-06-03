@@ -91,10 +91,11 @@ class PersonaStyleExampleRead(PersonaStyleExampleBase):
 
 
 class PersonaCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     slug: str
     description: str | None = None
-    is_active: bool = True
     style_profile: PersonaStyleProfileCreate | None = None
     quotes: list[PersonaQuoteCreate] = Field(default_factory=list)
     phrase_templates: list[PersonaPhraseTemplateCreate] = Field(default_factory=list)
@@ -102,10 +103,11 @@ class PersonaCreate(BaseModel):
 
 
 class PersonaUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str | None = None
     slug: str | None = None
     description: str | None = None
-    is_active: bool | None = None
     style_profile: PersonaStyleProfileUpdate | None = None
 
 
@@ -116,7 +118,6 @@ class PersonaRead(BaseModel):
     name: str
     slug: str
     description: str | None
-    is_active: bool
     created_at: datetime
     updated_at: datetime
     style_profile: PersonaStyleProfileRead | None = None

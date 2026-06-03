@@ -1,4 +1,7 @@
+import datetime
 import logging
+import uuid
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -6,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_session
+from app.domain.generation.ai_schemas import StyledNatalReport, ReportSection
+from app.domain.generation.enums import GenerationStatus
 from app.domain.generation.schemas import (
     ChartImageResponse,
     GenerationCreate,
@@ -45,21 +50,19 @@ async def create_generation(
         extra={
             "persona_id": str(payload.persona_id),
             "has_person_name": payload.person_name is not None,
-            "birth_city": payload.birth_place.city,
-            "birth_country": payload.birth_place.country,
             "birth_timezone": payload.birth_place.timezone,
         },
     )
     persona_repository = PersonaRepository(session)
-    persona = await persona_repository.get_active(payload.persona_id)
+    persona = await persona_repository.get(payload.persona_id)
     if persona is None:
         logger.warning(
-            "generation create rejected: active persona not found",
+            "generation create rejected: persona not found",
             extra={"persona_id": str(payload.persona_id)},
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Active persona not found",
+            detail="Persona not found",
         )
 
     generation_repository = GenerationRepository(session)
@@ -86,6 +89,15 @@ async def get_generation(
         "generation detail requested",
         extra={"generation_id": str(generation_id)},
     )
+    # return GenerationDetailResponse(generation_id=str(generation_id), status=GenerationStatus.COMPLETED, result_text=StyledNatalReport(
+    #     title="Тест разбор",
+    #     intro=ReportSection(title="Интро", text="текст интро"),
+    #     general=ReportSection(title="Общая информация", text="текст общей информации"),
+    # love_and_sex=ReportSection(title="Любовь и секс", text="текст любовь и секс"),
+    # career_and_money=ReportSection(title="Карьера и деньги", text="текст карьера и деньги"),
+    # demons=ReportSection(title="Демоны", text="текст демоны"),
+    # final_summary=ReportSection(title="Итоги", text="Итоги текст"),
+    # ), created_at=datetime.now())
     repository = GenerationRepository(session)
     generation = await repository.get(generation_id)
     if generation is None:

@@ -36,8 +36,6 @@ class Generation(Base):
     gender: Mapped[Gender | None] = mapped_column(String(16))
     birth_date: Mapped[date] = mapped_column(Date, nullable=False)
     birth_time: Mapped[time] = mapped_column(Time, nullable=False)
-    birth_city: Mapped[str] = mapped_column(String(255), nullable=False)
-    birth_country: Mapped[str] = mapped_column(String(255), nullable=False)
     birth_lat: Mapped[float] = mapped_column(Float, nullable=False)
     birth_lng: Mapped[float] = mapped_column(Float, nullable=False)
     birth_timezone: Mapped[str] = mapped_column(String(255), nullable=False)

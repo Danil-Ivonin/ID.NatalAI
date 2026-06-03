@@ -8,13 +8,13 @@ from app.domain.generation.enums import GenerationStatus
 
 
 class FakePersonaRepository:
-    active_personas = {}
+    personas = {}
 
     def __init__(self, session) -> None:
         self.session = session
 
-    async def get_active(self, persona_id):
-        return self.active_personas.get(persona_id)
+    async def get(self, persona_id):
+        return self.personas.get(persona_id)
 
 
 class FakeGenerationRepository:
@@ -55,7 +55,7 @@ class FakeChartImageStorage:
 def client(monkeypatch, generation_dispatch_spy, app_client):
     from app.api.v1 import generations
 
-    FakePersonaRepository.active_personas = {}
+    FakePersonaRepository.personas = {}
     FakeGenerationRepository.generations = {}
     FakeGenerationRepository.created_payloads = []
     FakeGenerationRepository.status = GenerationStatus.PENDING
@@ -74,8 +74,6 @@ def generation_payload(persona_id, person_name="Ada Lovelace"):
         "birth_date": date(1990, 1, 2).isoformat(),
         "birth_time": time(3, 4).isoformat(),
         "birth_place": {
-            "city": "Moscow",
-            "country": "Russia",
             "lat": 55.7558,
             "lng": 37.6173,
             "timezone": "Europe/Moscow",
@@ -99,9 +97,8 @@ def styled_report_payload() -> dict:
 
 def test_create_generation_with_person_name(client) -> None:
     persona_id = uuid4()
-    FakePersonaRepository.active_personas[persona_id] = SimpleNamespace(
+    FakePersonaRepository.personas[persona_id] = SimpleNamespace(
         id=persona_id,
-        is_active=True,
     )
 
     response = client.post(
@@ -119,9 +116,8 @@ def test_create_generation_with_person_name(client) -> None:
 
 def test_create_generation_without_person_name(client) -> None:
     persona_id = uuid4()
-    FakePersonaRepository.active_personas[persona_id] = SimpleNamespace(
+    FakePersonaRepository.personas[persona_id] = SimpleNamespace(
         id=persona_id,
-        is_active=True,
     )
     payload = generation_payload(persona_id)
     payload.pop("person_name")
@@ -139,9 +135,8 @@ def test_create_generation_without_person_name(client) -> None:
 
 def test_create_generation_accepts_string_status_from_database(client) -> None:
     persona_id = uuid4()
-    FakePersonaRepository.active_personas[persona_id] = SimpleNamespace(
+    FakePersonaRepository.personas[persona_id] = SimpleNamespace(
         id=persona_id,
-        is_active=True,
     )
     FakeGenerationRepository.status = "pending"
 
@@ -149,6 +144,29 @@ def test_create_generation_accepts_string_status_from_database(client) -> None:
 
     assert response.status_code == 201
     assert response.json()["status"] == "pending"
+
+
+def test_create_generation_requires_persona_id(client) -> None:
+    persona_id = uuid4()
+    payload = generation_payload(persona_id)
+    payload.pop("persona_id")
+
+    response = client.post("/api/v1/generations", json=payload)
+
+    assert response.status_code == 422
+    assert FakeGenerationRepository.created_payloads == []
+    assert client.dispatched_generation_ids == []
+
+
+def test_create_generation_rejects_unknown_persona(client) -> None:
+    persona_id = uuid4()
+
+    response = client.post("/api/v1/generations", json=generation_payload(persona_id))
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Persona not found"}
+    assert FakeGenerationRepository.created_payloads == []
+    assert client.dispatched_generation_ids == []
 
 
 def test_get_generation(client) -> None:

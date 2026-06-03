@@ -153,8 +153,6 @@ class GenerationBrief(StrictSchema):
     main_strength: str
     main_weakness: str
     best_humor_angles: list[str]
-    sensitive_topics_to_avoid: list[str]
-    recommended_tone: str
 
 
 class AstrologyProfile(StrictSchema):
