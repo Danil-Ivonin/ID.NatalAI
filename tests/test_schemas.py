@@ -12,7 +12,6 @@ from app.domain.generation.schemas import (
     GenerationCreate,
     GenerationDetailResponse,
 )
-from app.domain.persona.context import PersonaContext, PersonaContextProvider
 from app.domain.persona.schemas import PersonaCreate
 from app.domain.prompts.enums import PromptTemplateType
 from app.domain.prompts.models import PromptTemplate
@@ -47,6 +46,8 @@ def test_generation_create_accepts_explicit_null_person_name_and_gender() -> Non
             lat=55.7558,
             lng=37.6173,
             timezone="Europe/Moscow",
+            city="Moscow",
+            nation="RU"
         ),
         persona_id=uuid4(),
     )
@@ -67,6 +68,8 @@ def test_generation_create_rejects_invalid_gender(gender: str) -> None:
                 lat=55.7558,
                 lng=37.6173,
                 timezone="Europe/Moscow",
+                city="Moscow",
+                nation="RU"
             ),
             persona_id=uuid4(),
         )

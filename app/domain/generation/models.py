@@ -39,6 +39,8 @@ class Generation(Base):
     birth_lat: Mapped[float] = mapped_column(Float, nullable=False)
     birth_lng: Mapped[float] = mapped_column(Float, nullable=False)
     birth_timezone: Mapped[str] = mapped_column(String(255), nullable=False)
+    birth_city: Mapped[str] = mapped_column(String(255), nullable=False)
+    birth_nation: Mapped[str] = mapped_column(String(255), nullable=False)
     persona_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("personas.id"), nullable=False
     )

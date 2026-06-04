@@ -27,6 +27,8 @@ class NatalChartService:
             lat: float,
             lng: float,
             timezone: str,
+            city: str,
+            nation: str,
     ) -> NatalChartResult:
         chart_subject_name = person_name or "Anonymous"
         logger.info(
@@ -49,6 +51,8 @@ class NatalChartService:
             birth_date.day,
             birth_time.hour,
             birth_time.minute,
+            city=city,
+            nation=nation,
             lng=lng,
             lat=lat,
             tz_str=timezone,

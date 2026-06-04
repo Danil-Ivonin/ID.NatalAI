@@ -152,6 +152,8 @@ async def test_generation_create_flattens_birth_place_and_starts_pending() -> No
                 lat=55.7558,
                 lng=37.6173,
                 timezone="Europe/Moscow",
+                city="Moscow",
+                nation="RU"
             ),
             persona_id=persona_id,
         )
@@ -510,6 +512,8 @@ async def test_generation_status_transitions_persist_in_db(db_session) -> None:
                 lat=55.7558,
                 lng=37.6173,
                 timezone="Europe/Moscow",
+                city="Moscow",
+                nation="RU"
             ),
             persona_id=persona.id,
         )

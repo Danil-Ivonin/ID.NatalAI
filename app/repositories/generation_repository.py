@@ -25,6 +25,8 @@ class GenerationRepository:
             birth_lat=data.birth_place.lat,
             birth_lng=data.birth_place.lng,
             birth_timezone=data.birth_place.timezone,
+            birth_city=data.birth_place.city,
+            birth_nation=data.birth_place.nation,
             persona_id=data.persona_id,
             status=GenerationStatus.PENDING,
         )
