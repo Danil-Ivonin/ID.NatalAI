@@ -219,3 +219,5 @@ __marimo__/
 
 # Temporary files
 /tmp
+
+*.DS_Store

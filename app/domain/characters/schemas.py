@@ -1,11 +1,34 @@
+from struct import pack, unpack
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, PositiveInt, StringConstraints
 
 from app.domain.characters.enums import CharacterEmotion, HumorType, SpeechPattern
 
 NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
-Embedding = Annotated[list[float], Field(min_length=3072, max_length=3072)]
+FLOAT32_MAX = 3.4028234663852886e38
+EmbeddingValue = Annotated[
+    float,
+    Field(
+        strict=True,
+        allow_inf_nan=False,
+        ge=-FLOAT32_MAX,
+        le=FLOAT32_MAX,
+    ),
+]
+
+
+def _non_zero(values: list[float]) -> list[float]:
+    if not any(unpack("!f", pack("!f", value))[0] for value in values):
+        raise ValueError("embedding must be non-zero")
+    return values
+
+
+Embedding = Annotated[
+    list[EmbeddingValue],
+    Field(min_length=3072, max_length=3072),
+    AfterValidator(_non_zero),
+]
 
 
 class StrictModel(BaseModel):
@@ -96,5 +119,5 @@ class CharacterExampleSearch(StrictModel):
     emotion: CharacterEmotion
     humor_types: list[HumorType] = Field(default_factory=list, max_length=2)
     speech_patterns: list[SpeechPattern] = Field(default_factory=list, max_length=3)
-    exclude_ids: set[int] = Field(default_factory=set)
+    exclude_ids: set[PositiveInt] = Field(default_factory=set)
     limit: int = Field(default=8, ge=1, le=100)

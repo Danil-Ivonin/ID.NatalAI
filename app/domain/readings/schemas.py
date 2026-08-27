@@ -10,7 +10,12 @@ NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length
 
 
 class StrictModel(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        validate_by_alias=True,
+        validate_by_name=False,
+        serialize_by_alias=True,
+    )
 
 
 class Sex(StrEnum):

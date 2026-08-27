@@ -3,7 +3,12 @@ from copy import deepcopy
 import pytest
 from pydantic import ValidationError
 
-from app.domain.readings.schemas import BlockStylePlan, NeutralBlock, NeutralChartReading
+from app.domain.readings.schemas import (
+    AspectEvidence,
+    BlockStylePlan,
+    NeutralBlock,
+    NeutralChartReading,
+)
 
 
 def valid_reading_payload() -> dict:
@@ -95,3 +100,25 @@ def test_style_plan_rejects_duplicate_hook_ids() -> None:
     payload["hook_plans"].append(deepcopy(payload["hook_plans"][0]))
     with pytest.raises(ValidationError, match="hook IDs must be unique"):
         BlockStylePlan.model_validate(payload)
+
+
+def test_aspect_evidence_uses_contract_alias_for_input_and_output() -> None:
+    evidence = AspectEvidence.model_validate(
+        {"type": "aspect", "from": "Venus", "to": "Saturn", "aspect": "square"}
+    )
+
+    assert evidence.model_dump(mode="json") == {
+        "type": "aspect",
+        "from": "Venus",
+        "to": "Saturn",
+        "aspect": "square",
+    }
+    with pytest.raises(ValidationError):
+        AspectEvidence.model_validate(
+            {
+                "type": "aspect",
+                "from_body": "Venus",
+                "to": "Saturn",
+                "aspect": "square",
+            }
+        )

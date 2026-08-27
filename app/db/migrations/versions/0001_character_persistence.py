@@ -12,8 +12,6 @@ from pgvector.sqlalchemy import Vector
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-from app.domain.characters.enums import CharacterEmotion, HumorType, SpeechPattern
-
 revision: str = "0001_character_persistence"
 down_revision: str | Sequence[str] | None = None
 branch_labels: str | Sequence[str] | None = None
@@ -21,17 +19,79 @@ depends_on: str | Sequence[str] | None = None
 
 
 character_emotion = postgresql.ENUM(
-    *(value.value for value in CharacterEmotion),
+    "calm",
+    "curiosity",
+    "playfulness",
+    "amusement",
+    "warmth",
+    "empathy",
+    "admiration",
+    "hope",
+    "confidence",
+    "surprise",
+    "skepticism",
+    "irritation",
+    "frustration",
+    "anxiety",
+    "tension",
+    "melancholy",
+    "sadness",
+    "bitterness",
+    "indignation",
+    "anger",
+    "determination",
     name="character_emotion",
     create_type=False,
 )
 humor_type = postgresql.ENUM(
-    *(value.value for value in HumorType),
+    "irony",
+    "self_irony",
+    "sarcasm",
+    "hyperbole",
+    "understatement",
+    "absurdity",
+    "bathos",
+    "comic_comparison",
+    "reversal",
+    "parody",
+    "wordplay",
+    "literalism",
+    "deadpan",
+    "mock_seriousness",
+    "comic_enumeration",
+    "personification",
+    "false_naivety",
+    "callback",
+    "dark_humor",
     name="humor_type",
     create_type=False,
 )
 speech_pattern = postgresql.ENUM(
-    *(value.value for value in SpeechPattern),
+    "direct_address",
+    "observation",
+    "rhetorical_question",
+    "question_answer",
+    "short_verdict",
+    "contrast",
+    "antithesis",
+    "gradation",
+    "parallelism",
+    "anaphora",
+    "repetition",
+    "enumeration",
+    "metaphor",
+    "analogy",
+    "aphorism",
+    "paradox",
+    "parenthesis",
+    "aside",
+    "dialogue_imitation",
+    "false_concession",
+    "self_correction",
+    "imperative",
+    "abrupt_sentence",
+    "long_observation",
+    "callback",
     name="speech_pattern",
     create_type=False,
 )

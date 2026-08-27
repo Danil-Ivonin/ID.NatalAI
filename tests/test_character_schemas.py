@@ -79,7 +79,7 @@ def test_character_profile_forbids_unknown_fields() -> None:
 def test_character_example_enforces_embedding_dimension() -> None:
     with pytest.raises(ValidationError):
         CharacterExampleCreate(**VALID_EXAMPLE, embedding=[0.0] * 3071)
-    example = CharacterExampleCreate(**VALID_EXAMPLE, embedding=[0.0] * 3072)
+    example = CharacterExampleCreate(**VALID_EXAMPLE, embedding=[0.1] * 3072)
     assert len(example.embedding or []) == 3072
 
 
@@ -87,9 +87,48 @@ def test_character_example_search_enforces_tag_limits() -> None:
     with pytest.raises(ValidationError):
         CharacterExampleSearch(
             character_id=1,
-            embedding=[0.0] * 3072,
+            embedding=[0.1] * 3072,
             emotion="calm",
             humor_types=["irony", "sarcasm", "deadpan"],
+        )
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [float("nan"), float("inf"), -float("inf"), True, "1", 4e38],
+)
+def test_embedding_rejects_non_pgvector_components(invalid) -> None:
+    embedding = [0.1] * 3072
+    embedding[0] = invalid
+
+    with pytest.raises(ValidationError):
+        CharacterExampleCreate(**VALID_EXAMPLE, embedding=embedding)
+
+
+def test_embedding_rejects_zero_vector() -> None:
+    with pytest.raises(ValidationError, match="non-zero"):
+        CharacterExampleSearch(
+            character_id=1,
+            embedding=[0.0] * 3072,
+            emotion="calm",
+        )
+
+    with pytest.raises(ValidationError, match="non-zero"):
+        CharacterExampleSearch(
+            character_id=1,
+            embedding=[1e-300] * 3072,
+            emotion="calm",
+        )
+
+
+@pytest.mark.parametrize("invalid_id", [0, -1])
+def test_search_rejects_non_positive_excluded_ids(invalid_id: int) -> None:
+    with pytest.raises(ValidationError):
+        CharacterExampleSearch(
+            character_id=1,
+            embedding=[0.1] * 3072,
+            emotion="calm",
+            exclude_ids={invalid_id},
         )
 
 

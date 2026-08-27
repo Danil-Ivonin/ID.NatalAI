@@ -1,172 +1,31 @@
-# NatalAI Backend MVP
+# NatalAI persistence
 
-NatalAI Backend MVP is the API and background worker for generating stylized natal-chart reports. It accepts birth data and a persona, builds a natal chart context, sends generation prompts through OpenRouter, and stores generation status/results in PostgreSQL.
+The project currently implements the persistence contracts from `../planning`:
 
-## Stack
+- strict Pydantic models for character passports, neutral readings, and block style plans;
+- SQLAlchemy models for characters and speech examples;
+- PostgreSQL enums and pgvector embeddings with 3072 dimensions;
+- async repositories for profiles, examples, and style-RAG search.
 
-- Python 3.11
-- FastAPI and Uvicorn for the HTTP API
-- SQLAlchemy async ORM with asyncpg
-- Alembic for database migrations
-- PostgreSQL 16 for persistence
-- Redis 7 and Celery for background generation jobs
-- Pydantic Settings for environment configuration
-- OpenRouter for AI model calls
-- uv for dependency and command execution
-- pytest for tests
+Generation orchestration and HTTP CRUD are intentionally deferred until their contracts exist in `planning`.
 
-## Configuration
+This revision starts a new migration history and requires a fresh database. Back up any legacy data, then recreate the database/volume before running `alembic upgrade head`; deleted legacy revision IDs cannot be upgraded in place.
 
-Copy the example environment file and set your OpenRouter key:
+## Run
 
-```powershell
-Copy-Item .env.example .env
-```
-
-Edit `.env` and fill:
-
-```dotenv
-OPENROUTER_API_KEY=your-real-openrouter-key
-```
-
-`OPENROUTER_API_KEY` is required for AI generation. Compose files can still be
-rendered without a `.env`, but the worker/OpenRouter client fails fast before
-generation if the key is empty.
-
-Natal chart images are converted from SVG to PNG and uploaded to S3-compatible storage. For
-MinIO, configure:
-
-```dotenv
-CHART_IMAGE_S3_ENDPOINT_URL=http://minio:9000
-CHART_IMAGE_S3_REGION=us-east-1
-CHART_IMAGE_S3_BUCKET=natalai-charts
-CHART_IMAGE_S3_ACCESS_KEY_ID=minioadmin
-CHART_IMAGE_S3_SECRET_ACCESS_KEY=minioadmin
-CHART_IMAGE_URL_EXPIRES_SECONDS=86400
-```
-
-The checked-in Docker Compose file injects container-friendly service URLs for PostgreSQL and Redis. If you run the API or worker directly on the host while PostgreSQL/Redis are running in Docker Compose, use localhost-based values:
-
-```dotenv
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/natalai
-CELERY_BROKER_URL=redis://localhost:6379/0
-CELERY_RESULT_BACKEND=redis://localhost:6379/1
-REDIS_URL=redis://localhost:6379/0
-CHART_IMAGE_S3_ENDPOINT_URL=http://localhost:9000
-```
-
-## Run With Docker Compose
-
-Start PostgreSQL, Redis, and MinIO:
-
-```powershell
-docker compose up -d postgres redis minio minio-init
-```
-
-Run Alembic migrations:
-
-```powershell
+```bash
+docker compose up -d postgres
 docker compose run --rm app alembic upgrade head
+docker compose up --build app
 ```
 
-Start the API and worker:
-
-```powershell
-docker compose up --build app worker
-```
-
-The API is available at `http://localhost:8000`.
-
-## Run Locally
-
-Install/sync dependencies:
-
-```powershell
-uv sync
-```
-
-Start only PostgreSQL, Redis, and MinIO in Docker Compose:
-
-```powershell
-docker compose up -d postgres redis minio minio-init
-```
-
-Make sure `.env` uses localhost URLs for host-run processes, then run migrations:
-
-```powershell
-uv run alembic upgrade head
-```
-
-Start the API:
-
-```powershell
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Start the worker in a second shell:
-
-```powershell
-uv run celery -A app.core.celery_app.celery_app worker --loglevel=info
-```
-
-## Generation Endpoint
-
-Create or list personas and copy the persona `id` to use for this generation:
-
-```powershell
-curl.exe http://localhost:8000/api/v1/personas
-```
-
-Create a generation job:
-
-```powershell
-curl.exe -X POST http://localhost:8000/api/v1/generations `
-  -H "Content-Type: application/json" `
-  -d '{
-    "person_name": "Alex",
-    "gender": "female",
-    "birth_date": "1994-04-12",
-    "birth_time": "08:30:00",
-    "birth_place": {
-      "lat": 55.7558,
-      "lng": 37.6173,
-      "timezone": "Europe/Moscow"
-    },
-    "persona_id": "replace-with-persona-id"
-  }'
-```
-
-The response includes a `generation_id`. Check job status and result:
-
-```powershell
-curl.exe http://localhost:8000/api/v1/generations/replace-with-generation-id
-```
+The health endpoint is `GET http://localhost:8000/health`.
 
 ## Tests
 
-Run the full test suite:
-
-```powershell
-uv run pytest -v
+```bash
+uv sync
+uv run pytest -q
 ```
 
-Database integration tests are marked `db_integration` and use `DATABASE_URL`, defaulting to `postgresql+asyncpg://postgres:postgres@localhost:5432/natalai_test` in tests. They skip automatically if the PostgreSQL test database is unavailable or if `APP_ENV`/`DATABASE_URL` are not clearly test-scoped.
-
-Useful targeted checks:
-
-```powershell
-uv run python -m py_compile app/main.py app/core/config.py app/services/prompt_builder.py app/workers/tasks.py
-docker compose config
-```
-
-## Architecture Map
-
-- `app/main.py`: FastAPI application setup and API router registration.
-- `app/api/v1/`: HTTP endpoints for personas, prompt templates, and generation jobs.
-- `app/core/`: configuration, logging, database session setup, Celery app, and shared exceptions.
-- `app/db/`: SQLAlchemy models and Alembic migrations.
-- `app/domain/`: Pydantic schemas, enums, and domain models for personas, prompts, and generations.
-- `app/repositories/`: database access layer for personas, prompt templates, and generations.
-- `app/services/`: natal chart generation, prompt building, OpenRouter calls, persona context assembly, and AI generation orchestration.
-- `app/workers/`: Celery tasks that process generation jobs asynchronously.
-- `tests/`: unit, API, worker, and optional PostgreSQL integration tests.
+PostgreSQL integration tests use `natalai_test` and skip when that database is unavailable. The fixture refuses schema operations unless `APP_ENV=test` and the database name is `natalai_test` or ends with `_test`.

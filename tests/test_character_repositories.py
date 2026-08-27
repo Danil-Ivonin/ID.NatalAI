@@ -158,7 +158,7 @@ async def test_example_mutations_return_typed_models() -> None:
 
     embedded = await repository.set_embedding(
         row.id,
-        CharacterExampleEmbedding(embedding=[0.0] * 3072),
+        CharacterExampleEmbedding(embedding=[0.1] * 3072),
     )
     inactive = await repository.set_active(row.id, False)
 
@@ -174,7 +174,7 @@ async def test_search_builds_required_filters_and_soft_ranking() -> None:
     await CharacterExampleRepository(session).search(
         CharacterExampleSearch(
             character_id=7,
-            embedding=[0.0] * 3072,
+            embedding=[0.1] * 3072,
             emotion=CharacterEmotion.SKEPTICISM,
             humor_types=["irony"],
             speech_patterns=["observation"],
@@ -199,7 +199,7 @@ async def test_search_omits_empty_optional_filters() -> None:
     await CharacterExampleRepository(session).search(
         CharacterExampleSearch(
             character_id=7,
-            embedding=[0.0] * 3072,
+            embedding=[0.1] * 3072,
             emotion="calm",
         )
     )
