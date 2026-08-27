@@ -1,9 +1,7 @@
-from app.repositories.generation_repository import GenerationRepository
-from app.repositories.persona_repository import PersonaRepository
-from app.repositories.prompt_template_repository import PromptTemplateRepository
+from app.repositories.character_example_repository import CharacterExampleRepository
+from app.repositories.character_repository import CharacterRepository
 
 __all__ = [
-    "GenerationRepository",
-    "PersonaRepository",
-    "PromptTemplateRepository",
+    "CharacterExampleRepository",
+    "CharacterRepository",
 ]
