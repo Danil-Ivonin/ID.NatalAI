@@ -1,6 +1,7 @@
-from enum import StrEnum
+import enum
 
 
-class Sex(StrEnum):
+class Sex(enum.Enum):
     MALE = "male"
     FEMALE = "female"
+    UNDEFINED = "undefined"

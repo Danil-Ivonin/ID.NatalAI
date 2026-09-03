@@ -1,7 +1,8 @@
+import uuid
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import BigInteger, Boolean, Enum, ForeignKey, Identity, Index, Text, text
+from sqlalchemy import BigInteger, Boolean, Enum, ForeignKey, Identity, Index, Text, text, UUID
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,20 +30,18 @@ SPEECH_PATTERN = Enum(
 class Character(Base):
     __tablename__ = "characters"
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()"))
     name: Mapped[str] = mapped_column(Text, nullable=False)
     profile: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
 
 class CharacterExample(Base):
     __tablename__ = "character_examples"
-    __table_args__ = (
-        Index("character_examples_character_id_idx", "character_id"),
-    )
+    __table_args__ = (Index("character_examples_character_id_idx", "character_id"),)
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    character_id: Mapped[int] = mapped_column(
-        BigInteger,
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()"))
+    character_id: Mapped[uuid.UUID] = mapped_column(
+        UUID,
         ForeignKey("characters.id", ondelete="CASCADE"),
         nullable=False,
     )
@@ -67,9 +66,3 @@ class CharacterExample(Base):
         nullable=False,
     )
     embedding: Mapped[list[float] | None] = mapped_column(Vector(3072))
-    active: Mapped[bool] = mapped_column(
-        Boolean,
-        default=True,
-        server_default=text("true"),
-        nullable=False,
-    )

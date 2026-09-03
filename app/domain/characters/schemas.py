@@ -1,5 +1,6 @@
 from struct import pack, unpack
 from typing import Annotated
+from uuid import UUID
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, PositiveInt, StringConstraints
 
@@ -89,11 +90,11 @@ class CharacterProfileCreate(CharacterProfileBody):
 
 
 class CharacterProfile(CharacterProfileCreate):
-    character_id: int = Field(gt=0)
+    character_id: UUID
 
 
 class CharacterExampleCreate(StrictModel):
-    character_id: int = Field(gt=0)
+    character_id: UUID
     raw_text: NonBlankStr
     clean_text: NonBlankStr
     context: NonBlankStr
@@ -106,7 +107,7 @@ class CharacterExampleCreate(StrictModel):
 
 
 class CharacterExample(CharacterExampleCreate):
-    id: int = Field(gt=0)
+    id: UUID
 
 
 class CharacterExampleEmbedding(StrictModel):
@@ -114,10 +115,10 @@ class CharacterExampleEmbedding(StrictModel):
 
 
 class CharacterExampleSearch(StrictModel):
-    character_id: int = Field(gt=0)
+    character_id: UUID
     embedding: Embedding
     emotion: CharacterEmotion
     humor_types: list[HumorType] = Field(default_factory=list, max_length=2)
     speech_patterns: list[SpeechPattern] = Field(default_factory=list, max_length=3)
-    exclude_ids: set[PositiveInt] = Field(default_factory=set)
+    exclude_ids: set[UUID] = Field(default_factory=set)
     limit: int = Field(default=8, ge=1, le=100)
