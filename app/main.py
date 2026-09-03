@@ -1,13 +1,14 @@
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
-from app.api.v1 import users
+from app.api.v1 import generations, users
 from app.core.exceptions import NotFoundError
 from app.core.logging import configure_logging
 
 configure_logging()
 
 app = FastAPI(title="NatalAI Backend")
+app.include_router(generations.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 
 
