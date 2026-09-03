@@ -139,12 +139,15 @@ class MemoryUserRepository:
 def users_client(monkeypatch) -> TestClient:
     from app.api.v1 import users as users_api
     from app.core.database import get_session
+    from app.core.exceptions import NotFoundError
+    from app.main import not_found_handler
 
     MemoryUserRepository.users = {}
     MemoryUserRepository.persons = {}
     monkeypatch.setattr(users_api, "UserRepository", MemoryUserRepository)
     app = FastAPI()
     app.include_router(users_api.router, prefix="/api/v1")
+    app.add_exception_handler(NotFoundError, not_found_handler)
     app.dependency_overrides[get_session] = lambda: CommitSession()
     return TestClient(app)
 

@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
@@ -13,60 +13,53 @@ from app.domain.users.schemas import (
     UserUpdate,
 )
 from app.repositories.user_repository import UserRepository
+from app.services.user_service import UserService
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+def get_user_service(session: AsyncSession = Depends(get_session)) -> UserService:
+    return UserService(UserRepository(session), session.commit)
 
 
 @router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def create_user(
     payload: UserCreate,
-    session: AsyncSession = Depends(get_session),
+    service: UserService = Depends(get_user_service),
 ) -> UserRead:
-    user = await UserRepository(session).create_user(payload)
-    await session.commit()
-    return UserRead.model_validate(user)
+    return UserRead.model_validate(await service.create_user(payload))
 
 
 @router.get("", response_model=list[UserRead])
 async def list_users(
-    session: AsyncSession = Depends(get_session),
+    service: UserService = Depends(get_user_service),
 ) -> list[UserRead]:
-    users = await UserRepository(session).list_users()
-    return [UserRead.model_validate(user) for user in users]
+    return [UserRead.model_validate(user) for user in await service.list_users()]
 
 
 @router.get("/{user_id}", response_model=UserRead)
 async def get_user(
     user_id: UUID,
-    session: AsyncSession = Depends(get_session),
+    service: UserService = Depends(get_user_service),
 ) -> UserRead:
-    user = await UserRepository(session).get_user(user_id)
-    if user is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-    return UserRead.model_validate(user)
+    return UserRead.model_validate(await service.get_user(user_id))
 
 
 @router.patch("/{user_id}", response_model=UserRead)
 async def update_user(
     user_id: UUID,
     payload: UserUpdate,
-    session: AsyncSession = Depends(get_session),
+    service: UserService = Depends(get_user_service),
 ) -> UserRead:
-    user = await UserRepository(session).update_user(user_id, payload)
-    if user is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-    await session.commit()
-    return UserRead.model_validate(user)
+    return UserRead.model_validate(await service.update_user(user_id, payload))
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_id: UUID,
-    session: AsyncSession = Depends(get_session),
+    service: UserService = Depends(get_user_service),
 ) -> Response:
-    if not await UserRepository(session).delete_user(user_id):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-    await session.commit()
+    await service.delete_user(user_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -78,38 +71,29 @@ async def delete_user(
 async def create_person(
     user_id: UUID,
     payload: PersonCreate,
-    session: AsyncSession = Depends(get_session),
+    service: UserService = Depends(get_user_service),
 ) -> PersonRead:
-    repository = UserRepository(session)
-    if await repository.get_user(user_id) is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-    person = await repository.create_person(user_id, payload)
-    await session.commit()
-    return PersonRead.model_validate(person)
+    return PersonRead.model_validate(await service.create_person(user_id, payload))
 
 
 @router.get("/{user_id}/persons", response_model=list[PersonRead])
 async def list_persons(
     user_id: UUID,
-    session: AsyncSession = Depends(get_session),
+    service: UserService = Depends(get_user_service),
 ) -> list[PersonRead]:
-    repository = UserRepository(session)
-    if await repository.get_user(user_id) is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
-    persons = await repository.list_persons(user_id)
-    return [PersonRead.model_validate(person) for person in persons]
+    return [
+        PersonRead.model_validate(person)
+        for person in await service.list_persons(user_id)
+    ]
 
 
 @router.get("/{user_id}/persons/{person_id}", response_model=PersonRead)
 async def get_person(
     user_id: UUID,
     person_id: UUID,
-    session: AsyncSession = Depends(get_session),
+    service: UserService = Depends(get_user_service),
 ) -> PersonRead:
-    person = await UserRepository(session).get_person(user_id, person_id)
-    if person is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Person not found")
-    return PersonRead.model_validate(person)
+    return PersonRead.model_validate(await service.get_person(user_id, person_id))
 
 
 @router.patch("/{user_id}/persons/{person_id}", response_model=PersonRead)
@@ -117,13 +101,11 @@ async def update_person(
     user_id: UUID,
     person_id: UUID,
     payload: PersonUpdate,
-    session: AsyncSession = Depends(get_session),
+    service: UserService = Depends(get_user_service),
 ) -> PersonRead:
-    person = await UserRepository(session).update_person(user_id, person_id, payload)
-    if person is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Person not found")
-    await session.commit()
-    return PersonRead.model_validate(person)
+    return PersonRead.model_validate(
+        await service.update_person(user_id, person_id, payload)
+    )
 
 
 @router.delete(
@@ -133,9 +115,7 @@ async def update_person(
 async def delete_person(
     user_id: UUID,
     person_id: UUID,
-    session: AsyncSession = Depends(get_session),
+    service: UserService = Depends(get_user_service),
 ) -> Response:
-    if not await UserRepository(session).delete_person(user_id, person_id):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Person not found")
-    await session.commit()
+    await service.delete_person(user_id, person_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
