@@ -65,7 +65,6 @@ def test_build_natal_chart_uses_kerykeion_birth_data_and_xml_context(monkeypatch
     )
 
     assert result.natal_xml == "<natal>xml</natal>"
-    assert result.chart_data_json == {"chart": {"subject": "Natasha"}}
     assert result.chart_svg == "<svg>chart</svg>"
     assert captured_drawer == {
         "chart_data": {"chart": {"subject": "Natasha"}},

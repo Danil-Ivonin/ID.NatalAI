@@ -12,18 +12,10 @@ from pydantic import BaseModel
 
 from app.core.config import Settings, get_settings
 from app.core.exceptions import NotFoundError
-from app.domain.generation.ai_schemas import AstrologyProfile, StyledNatalReport
-from app.domain.generation.enums import GenerationStage, GenerationStatus
-from app.domain.persona.context import PersonaContextProvider
-from app.domain.prompts.enums import PromptTemplateType
-from app.repositories.generation_repository import GenerationRepository
-from app.repositories.prompt_template_repository import PromptTemplateRepository
 from app.services.chart_image_storage import ChartImageStorage
 from app.services.natal_chart_service import NatalChartService
 from app.services.openrouter_client import OpenRouterClient, OpenRouterChatResult
 from app.services.prompt_builder import PromptBuilder
-
-logger = logging.getLogger(__name__)
 
 
 class AIGenerationService:
@@ -56,23 +48,7 @@ class AIGenerationService:
     async def generate(self, generation_id: UUID) -> None:
         generation = await self.generation_repository.get(generation_id)
         if generation is None:
-            logger.warning(
-                "generation pipeline skipped: generation not found",
-                extra={"generation_id": str(generation_id)},
-            )
             raise NotFoundError(f"Generation not found: {generation_id}")
-
-        logger.info(
-            "generation pipeline started",
-            extra={
-                "generation_id": str(generation_id),
-                "persona_id": str(generation.persona_id),
-                "status": self._enum_value(getattr(generation, "status", None)),
-                "has_person_name": generation.person_name is not None,
-                "gender_provided": generation.gender is not None,
-                "birth_timezone": generation.birth_timezone,
-            },
-        )
         stage: GenerationStage | None = None
         model: str | None = None
         template = None
@@ -85,20 +61,9 @@ class AIGenerationService:
             await self.generation_repository.set_status(
                 generation_id, GenerationStatus.PROCESSING
             )
-            logger.info(
-                "generation status updated",
-                extra={
-                    "generation_id": str(generation_id),
-                    "status": GenerationStatus.PROCESSING.value,
-                },
-            )
             await self._commit_progress()
 
             stage = GenerationStage.NATAL_CHART_BUILD
-            logger.info(
-                "generation stage started",
-                extra=self._stage_log_context(generation_id, stage, provider="kerykeion"),
-            )
             chart = self.natal_chart_service.build_natal_chart(
                 person_name=generation.person_name,
                 gender=generation.gender,
@@ -125,20 +90,6 @@ class AIGenerationService:
                     chart_image_object_key,
                     chart_image_mime_type,
                 )
-            logger.info(
-                "natal chart saved",
-                extra={
-                    **self._stage_log_context(
-                        generation_id, stage, provider="kerykeion"
-                    ),
-                    "natal_xml_chars": len(chart.natal_xml),
-                    "chart_data_available": getattr(chart, "chart_data_json", None)
-                    is not None,
-                    "chart_image_object_key": chart_image_object_key
-                    if self.chart_image_storage is not None
-                    else None,
-                },
-            )
             await self._create_success_run(
                 generation_id=generation_id,
                 stage=stage,
@@ -150,40 +101,14 @@ class AIGenerationService:
                 result=None,
             )
             await self._commit_progress()
-            logger.info(
-                "generation stage completed",
-                extra={
-                    **self._stage_log_context(
-                        generation_id, stage, provider="kerykeion", model="local"
-                    ),
-                    "natal_xml_chars": len(chart.natal_xml),
-                },
-            )
 
             stage = GenerationStage.ASTROLOGY_PROFILE_EXTRACTION
             model = self.settings.openrouter_model_profile
-            logger.info(
-                "generation stage started",
-                extra=self._stage_log_context(
-                    generation_id, stage, provider=self.provider, model=model
-                ),
-            )
             template = await self._active_template(
                 PromptTemplateType.ASTROLOGY_PROFILE_EXTRACTION
             )
             template_id = template.id
             template_version = template.version
-            logger.info(
-                "active prompt template loaded",
-                extra={
-                    **self._stage_log_context(
-                        generation_id, stage, provider=self.provider, model=model
-                    ),
-                    "prompt_template_id": str(template_id),
-                    "prompt_template_version": template_version,
-                    "prompt_template_type": self._enum_value(template.type),
-                },
-            )
             messages = self.prompt_builder.build_astrology_profile_prompt(
                 natal_xml=chart.natal_xml,
                 person_name=generation.person_name,
@@ -191,48 +116,16 @@ class AIGenerationService:
                 template_content=template.content,
             )
             response_format = self._json_schema_response_format(AstrologyProfile)
-            logger.info(
-                "openrouter call started",
-                extra={
-                    **self._stage_log_context(
-                        generation_id, stage, provider=self.provider, model=model
-                    ),
-                    "prompt_message_count": len(messages),
-                    "response_schema": AstrologyProfile.__name__,
-                },
-            )
             profile_result = await self.openrouter_client.chat_completion(
                 model=model,
                 messages=messages,
                 response_format=response_format,
-            )
-            logger.info(
-                "openrouter call completed",
-                extra={
-                    **self._stage_log_context(
-                        generation_id, stage, provider=self.provider, model=model
-                    ),
-                    "input_tokens": profile_result.input_tokens,
-                    "output_tokens": profile_result.output_tokens,
-                    "latency_ms": profile_result.latency_ms,
-                    "content_chars": len(profile_result.content),
-                },
             )
             profile = AstrologyProfile.model_validate(
                 self._parse_json_content(profile_result.content)
             )
             profile_json = profile.model_dump(mode="json")
             await self.generation_repository.save_profile(generation_id, profile_json)
-            logger.info(
-                "astrology profile saved",
-                extra={
-                    **self._stage_log_context(
-                        generation_id, stage, provider=self.provider, model=model
-                    ),
-                    "profile_sections": len(profile_json["sections"]),
-                    "important_configurations": len(profile.important_configurations),
-                },
-            )
             await self._create_success_run(
                 generation_id=generation_id,
                 stage=stage,
@@ -244,62 +137,17 @@ class AIGenerationService:
                 result=profile_result,
             )
             await self._commit_progress()
-            logger.info(
-                "generation stage completed",
-                extra={
-                    **self._stage_log_context(
-                        generation_id, stage, provider=self.provider, model=model
-                    ),
-                    "input_tokens": profile_result.input_tokens,
-                    "output_tokens": profile_result.output_tokens,
-                    "latency_ms": profile_result.latency_ms,
-                },
-            )
 
             stage = GenerationStage.STYLED_REPORT_GENERATION
             model = self.settings.openrouter_model_report
-            logger.info(
-                "generation stage started",
-                extra=self._stage_log_context(
-                    generation_id, stage, provider=self.provider, model=model
-                ),
-            )
             persona_context = await self.persona_context_provider.get_context(
                 generation.persona_id
-            )
-            logger.info(
-                f"persona context loaded: {generation.persona_id}",
-                extra={
-                    **self._stage_log_context(
-                        generation_id, stage, provider=self.provider, model=model
-                    ),
-                    "persona_id": str(generation.persona_id),
-                    "persona_name": getattr(persona_context, "persona_name", None),
-                    "quotes_count": len(getattr(persona_context, "allowed_quotes", [])),
-                    "phrase_templates_count": len(
-                        getattr(persona_context, "phrase_templates", [])
-                    ),
-                    "style_examples_count": len(
-                        getattr(persona_context, "style_examples", [])
-                    ),
-                },
             )
             template = await self._active_template(
                 PromptTemplateType.STYLED_REPORT_GENERATION
             )
             template_id = template.id
             template_version = template.version
-            logger.info(
-                f"active prompt template loaded: {template.id}",
-                extra={
-                    **self._stage_log_context(
-                        generation_id, stage, provider=self.provider, model=model
-                    ),
-                    "prompt_template_id": str(template_id),
-                    "prompt_template_version": template_version,
-                    "prompt_template_type": self._enum_value(template.type),
-                },
-            )
             messages = self.prompt_builder.build_styled_report_prompt(
                 astrology_profile_json=profile_json,
                 persona_context=persona_context,
@@ -308,32 +156,10 @@ class AIGenerationService:
                 template_content=template.content,
             )
             response_format = self._json_schema_response_format(StyledNatalReport)
-            logger.info(
-                "openrouter call started",
-                extra={
-                    **self._stage_log_context(
-                        generation_id, stage, provider=self.provider, model=model
-                    ),
-                    "prompt_message_count": len(messages),
-                    "response_schema": StyledNatalReport.__name__,
-                },
-            )
             report_result = await self.openrouter_client.chat_completion(
                 model=model,
                 messages=messages,
                 response_format=response_format,
-            )
-            logger.info(
-                "openrouter call completed",
-                extra={
-                    **self._stage_log_context(
-                        generation_id, stage, provider=self.provider, model=model
-                    ),
-                    "input_tokens": report_result.input_tokens,
-                    "output_tokens": report_result.output_tokens,
-                    "latency_ms": report_result.latency_ms,
-                    "content_chars": len(report_result.content),
-                },
             )
             report = StyledNatalReport.model_validate(
                 self._parse_json_content(report_result.content)
@@ -343,15 +169,6 @@ class AIGenerationService:
                 generation_id,
                 report_json,
                 None,
-            )
-            logger.info(
-                "styled report saved",
-                extra={
-                    **self._stage_log_context(
-                        generation_id, stage, provider=self.provider, model=model
-                    ),
-                    "report_title": report.title,
-                },
             )
             await self._create_success_run(
                 generation_id=generation_id,
@@ -364,24 +181,6 @@ class AIGenerationService:
                 result=report_result,
             )
             await self._commit_progress()
-            logger.info(
-                "generation stage completed",
-                extra={
-                    **self._stage_log_context(
-                        generation_id, stage, provider=self.provider, model=model
-                    ),
-                    "input_tokens": report_result.input_tokens,
-                    "output_tokens": report_result.output_tokens,
-                    "latency_ms": report_result.latency_ms,
-                },
-            )
-            logger.info(
-                "generation pipeline completed",
-                extra={
-                    "generation_id": str(generation_id),
-                    "status": GenerationStatus.COMPLETED.value,
-                },
-            )
         except Exception as exc:
             error_message = str(exc)
             await self._rollback_progress()
@@ -400,15 +199,6 @@ class AIGenerationService:
                     error_message=error_message,
                 )
             await self._commit_progress()
-            logger.exception(
-                "generation failed",
-                extra={
-                    "generation_id": str(generation_id),
-                    "stage": stage.value if stage is not None else None,
-                    "provider": self.provider,
-                    "model": model,
-                },
-            )
             raise
 
     @staticmethod

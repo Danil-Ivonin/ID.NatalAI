@@ -14,8 +14,6 @@ logger = logging.getLogger(__name__)
 class NatalChartResult:
     natal_xml: str
     chart_svg: str
-    chart_data_json: dict[str, Any] | None = None
-
 
 class NatalChartService:
     def build_natal_chart(
@@ -61,7 +59,6 @@ class NatalChartService:
         chart_data = ChartDataFactory.create_natal_chart_data(subject)
         natal_xml = to_context(chart_data)
         chart_svg = self._draw_chart_svg(chart_data)
-        chart_data_json = self._to_json_dict(chart_data)
 
         logger.info(
             "natal chart build completed",
@@ -69,14 +66,12 @@ class NatalChartService:
                 "chart_subject_name": chart_subject_name,
                 "natal_xml_chars": len(natal_xml),
                 "chart_svg_bytes": len(chart_svg),
-                "chart_data_available": chart_data_json is not None,
             },
         )
 
         return NatalChartResult(
             natal_xml=natal_xml,
-            chart_svg=chart_svg,
-            chart_data_json=chart_data_json,
+            chart_svg=chart_svg
         )
 
     @staticmethod
@@ -90,13 +85,3 @@ class NatalChartService:
         )
         svg = drawer.generate_svg_string(remove_css_variables=True)
         return svg
-
-    @staticmethod
-    def _to_json_dict(chart_data: Any) -> dict[str, Any] | None:
-        if isinstance(chart_data, dict):
-            return chart_data
-        if hasattr(chart_data, "model_dump"):
-            return chart_data.model_dump(mode="json")
-        if hasattr(chart_data, "dict"):
-            return chart_data.dict()
-        return None

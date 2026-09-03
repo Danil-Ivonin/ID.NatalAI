@@ -152,6 +152,11 @@ class NeutralChartReading(StrictModel):
         return self
 
 
+class NeutralGeneration(StrictModel):
+    id: int = Field(gt=0)
+    reading: NeutralChartReading
+
+
 class HookStylePlan(StrictModel):
     hook_id: NonBlankStr
     rhetorical_goal: NonBlankStr
