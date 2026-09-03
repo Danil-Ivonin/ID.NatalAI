@@ -3,10 +3,14 @@ import uuid
 
 from sqlalchemy import Boolean, Date, Enum, Float, ForeignKey, Index, String, Time, text
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.domain.users.enums import Sex
+
+
+SEX = Enum(Sex, name="sex_enum", values_callable=lambda enum: [item.value for item in enum])
+
 
 class User(Base):
     __tablename__ = "users"
@@ -27,7 +31,7 @@ class Person(Base):
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    sex: Mapped[Sex] = mapped_column(Enum(Sex, name="sex_enum", default="undefined"))
+    sex: Mapped[Sex] = mapped_column(SEX, nullable=False)
     birth_date: Mapped[date] = mapped_column(Date, nullable=False)
     birth_time: Mapped[time] = mapped_column(Time, nullable=False)
     birth_lat: Mapped[float] = mapped_column(Float, nullable=False)
@@ -35,3 +39,10 @@ class Person(Base):
     birth_timezone: Mapped[str] = mapped_column(String(255), nullable=False)
     birth_city: Mapped[str] = mapped_column(String(255), nullable=False)
     birth_nation: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    astro_charts: Mapped[list["AstroChart"]] = relationship(
+        back_populates="person", cascade="all, delete-orphan", passive_deletes=True
+    )
+    generation_neutral: Mapped[list["GenerationNeutral"]] = relationship(
+        back_populates="person", cascade="all, delete-orphan", passive_deletes=True
+    )

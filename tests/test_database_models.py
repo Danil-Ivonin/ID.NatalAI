@@ -8,9 +8,10 @@ def test_metadata_contains_persistence_tables() -> None:
     import app.db.models  # noqa: F401
 
     assert sorted(Base.metadata.tables) == [
+        "astro_charts",
         "character_examples",
         "characters",
-        "neutral_generations",
+        "generation_neutral",
         "persons",
         "users",
     ]
@@ -33,12 +34,15 @@ def test_character_examples_match_planning_schema() -> None:
     )
 
 
-def test_neutral_generations_store_reading_as_jsonb() -> None:
+def test_generation_neutral_stores_result_and_usage_as_jsonb() -> None:
     import app.db.models  # noqa: F401
 
-    generations = Base.metadata.tables["neutral_generations"]
-    assert list(generations.c.keys()) == ["id", "reading"]
+    generations = Base.metadata.tables["generation_neutral"]
     assert isinstance(
-        generations.c.reading.type.dialect_impl(postgresql.dialect()),
+        generations.c.result.type.dialect_impl(postgresql.dialect()),
+        postgresql.JSONB,
+    )
+    assert isinstance(
+        generations.c.token_usage.type.dialect_impl(postgresql.dialect()),
         postgresql.JSONB,
     )
