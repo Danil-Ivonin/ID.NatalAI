@@ -1,6 +1,7 @@
 from collections import Counter
 from enum import StrEnum
 from typing import Annotated, Literal, Self
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -153,7 +154,7 @@ class NeutralChartReading(StrictModel):
 
 
 class NeutralGeneration(StrictModel):
-    id: int = Field(gt=0)
+    id: UUID
     reading: NeutralChartReading
 
 
