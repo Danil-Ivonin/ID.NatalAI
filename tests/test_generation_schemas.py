@@ -143,3 +143,18 @@ def test_update_schemas_reject_null_required_columns() -> None:
         AstroChartUpdate(natal_xml=None)
     with pytest.raises(ValidationError):
         GenerationNeutralUpdate(prompt=None)
+
+
+def test_generation_result_preserves_from_alias_in_json() -> None:
+    from app.domain.generations.generation_neutral.schemas import AspectEvidence
+
+    evidence = AspectEvidence.model_validate(
+        {"type": "aspect", "from": "Sun", "to": "Moon", "aspect": "trine"}
+    )
+
+    assert evidence.model_dump(mode="json") == {
+        "type": "aspect",
+        "from": "Sun",
+        "to": "Moon",
+        "aspect": "trine",
+    }
