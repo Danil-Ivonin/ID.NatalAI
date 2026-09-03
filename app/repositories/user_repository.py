@@ -24,6 +24,9 @@ class UserRepository:
     async def get_user(self, user_id: UUID) -> User | None:
         return await self.session.get(User, user_id)
 
+    async def get_person_by_id(self, person_id: UUID) -> Person | None:
+        return await self.session.get(Person, person_id)
+
     async def update_user(self, user_id: UUID, data: UserUpdate) -> User | None:
         user = await self.get_user(user_id)
         if user is None:
