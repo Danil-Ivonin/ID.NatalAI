@@ -174,12 +174,14 @@ def test_generation_crud_schemas_use_requested_enums_and_defaults() -> None:
         current_block="general",
     )
 
-    assert list(GenerationBlock) == ["general", "love", "work_money", "inner_demons"]
-    assert list(GenerationStatus) == ["pending", "processing", "complited", "failed"]
+    assert list(GenerationBlock) == ["intro", "general", "love", "work_money", "inner_demons"]
+    assert list(GenerationStatus) == ["pending", "processing", "completed", "failed"]
     assert list(GenerationProcessStatus) == [
         "pending",
+        "processing",
         "style_plan_generating",
-        "character_review_generating",
+        "character_block_generating",
+        "completed",
         "failed",
     ]
     assert payload.used_examples == []

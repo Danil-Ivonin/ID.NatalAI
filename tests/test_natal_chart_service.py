@@ -62,6 +62,8 @@ def test_build_natal_chart_uses_kerykeion_birth_data_and_xml_context(monkeypatch
         lat=51.6608,
         lng=39.2003,
         timezone="Europe/Moscow",
+        city="Воронеж",
+        nation="RU",
     )
 
     assert result.natal_xml == "<natal>xml</natal>"
@@ -84,6 +86,8 @@ def test_build_natal_chart_uses_kerykeion_birth_data_and_xml_context(monkeypatch
         "lng": 39.2003,
         "lat": 51.6608,
         "tz_str": "Europe/Moscow",
+        "city": "Воронеж",
+        "nation": "RU",
         "online": False,
     }
     assert "gender" not in captured_birth_data
@@ -138,6 +142,8 @@ def test_build_natal_chart_uses_anonymous_fallback_for_missing_name(monkeypatch)
         lat=51.6608,
         lng=39.2003,
         timezone="Europe/Moscow",
+        city="Воронеж",
+        nation="RU",
     )
 
     assert captured_birth_data["name"] == "Anonymous"

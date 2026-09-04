@@ -10,7 +10,7 @@ from app.domain.generations.generation_neutral.schemas import (
     GenerationNeutralRead,
 )
 from app.domain.generations.schemas import (
-    GenerationCharacterReviewRead,
+    GenerationCharacterBlockRead,
     GenerationRead,
     GenerationStylePlanRead,
 )
@@ -140,7 +140,7 @@ def client() -> TestClient:
     neutral_service = NeutralService()
     generation_service = CrudService(GenerationRead, "generation_id")
     style_plan_service = CrudService(GenerationStylePlanRead, "plan_id")
-    character_review_service = CrudService(GenerationCharacterReviewRead, "id")
+    character_block_service = CrudService(GenerationCharacterBlockRead, "id")
     app.dependency_overrides[generations.get_astro_chart_service] = (
         lambda: astro_service
     )
@@ -151,8 +151,8 @@ def client() -> TestClient:
     app.dependency_overrides[generations.get_generation_style_plan_service] = (
         lambda: style_plan_service
     )
-    app.dependency_overrides[generations.get_generation_character_review_service] = (
-        lambda: character_review_service
+    app.dependency_overrides[generations.get_generation_character_block_service] = (
+        lambda: character_block_service
     )
     return TestClient(app)
 
@@ -237,7 +237,7 @@ def test_generation_api_crud() -> None:
 
 @pytest.mark.parametrize(
     ("path", "id_field"),
-    [("style-plans", "plan_id"), ("character-reviews", "id")],
+    [("style-plans", "plan_id"), ("character-blocks", "id")],
 )
 def test_generation_step_api_crud(path, id_field) -> None:
     api = client()

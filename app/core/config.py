@@ -48,6 +48,10 @@ class Settings(BaseSettings):
         default="us-east-1",
         alias="CHART_IMAGE_S3_REGION",
     )
+    chart_image_public_endpoint_url: str = Field(
+        default="",
+        alias="CHART_IMAGE_PUBLIC_ENDPOINT_URL",
+    )
     chart_image_s3_bucket: str = Field(
         default="natalai-charts",
         alias="CHART_IMAGE_S3_BUCKET",

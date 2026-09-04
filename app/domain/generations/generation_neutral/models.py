@@ -13,7 +13,10 @@ if TYPE_CHECKING:
 
 class GenerationNeutral(Base):
     __tablename__ = "generation_neutral"
-    __table_args__ = (Index("generation_neutral_person_id_idx", "person_id"),)
+    __table_args__ = (
+        Index("generation_neutral_person_id_idx", "person_id"),
+        Index("generation_neutral_generation_id_idx", "generation_id", unique=True),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
@@ -22,6 +25,10 @@ class GenerationNeutral(Base):
         UUID(as_uuid=True),
         ForeignKey("persons.person_id", ondelete="CASCADE"),
         nullable=False,
+    )
+    generation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("generations.generation_id", ondelete="CASCADE"),
     )
     used_model: Mapped[str] = mapped_column(Text, nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)

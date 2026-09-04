@@ -1,31 +1,52 @@
+from collections import Counter
 from enum import StrEnum
 from typing import Annotated, Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from app.domain.generations.generation_neutral.schemas import BlockId
+from app.domain.characters.enums import CharacterEmotion, HumorType, SpeechPattern
+from app.domain.generations.generation_neutral.schemas import Block
 
 NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
-GenerationBlock = BlockId
+
+
+class GenerationBlock(StrEnum):
+    INTRO = "intro"
+    GENERAL = "general"
+    LOVE = "love"
+    WORK_MONEY = "work_money"
+    INNER_DEMONS = "inner_demons"
 
 
 class GenerationStatus(StrEnum):
     PENDING = "pending"
     PROCESSING = "processing"
-    COMPLITED = "complited"
+    COMPLETED = "completed"
     FAILED = "failed"
 
 
 class GenerationProcessStatus(StrEnum):
     PENDING = "pending"
+    PROCESSING = "processing"
     STYLE_PLAN_GENERATING = "style_plan_generating"
-    CHARACTER_REVIEW_GENERATING = "character_review_generating"
+    CHARACTER_BLOCK_GENERATING = "character_block_generating"
+    COMPLETED = "completed"
     FAILED = "failed"
 
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class GenerationCreate(StrictModel):
+    person_id: UUID
+    character_id: UUID
+    used_examples: list[UUID] = Field(default_factory=list)
+    current_block: GenerationBlock = GenerationBlock.INTRO
+    status: GenerationProcessStatus = GenerationProcessStatus.PENDING
+    payed: bool = False
+    payment_id: UUID | None = None
 
 
 class GenerationUpdate(StrictModel):
@@ -73,6 +94,46 @@ class GenerationStepUpdate(StrictModel):
         return data
 
 
+class GenerationStepCreate(StrictModel):
+    generation_id: UUID
+    block: GenerationBlock
+    status: GenerationStatus = GenerationStatus.PENDING
+    used_model: NonBlankStr
+    prompt: NonBlankStr
+    token_usage: dict[str, Any]
+    result: dict[str, Any]
+
+
+class HookStylePlan(StrictModel):
+    hook_id: NonBlankStr
+    rhetorical_goal: NonBlankStr
+    emotion: CharacterEmotion
+    humor_types: list[HumorType] = Field(default_factory=list, max_length=2)
+    speech_patterns: list[SpeechPattern] = Field(default_factory=list, max_length=3)
+    retrieval_intent: NonBlankStr
+
+
+class BlockStylePlan(StrictModel):
+    block_arc: NonBlankStr
+    hook_plans: list[HookStylePlan]
+
+    def validate_for(self, block: Block) -> "BlockStylePlan":
+        expected = [hook.id for hook in block.hooks]
+        actual = [plan.hook_id for plan in self.hook_plans]
+        if Counter(actual) != Counter(expected):
+            raise ValueError("style plan must cover every block hook exactly once")
+        return self
+
+
+class CharacterBlockResult(StrictModel):
+    title: NonBlankStr
+    text: NonBlankStr
+
+
+class GenerationStylePlanCreate(GenerationStepCreate):
+    pass
+
+
 class GenerationStylePlanUpdate(GenerationStepUpdate):
     pass
 
@@ -89,11 +150,15 @@ class GenerationStylePlanRead(StrictModel):
     plan_id: UUID
 
 
-class GenerationCharacterReviewUpdate(GenerationStepUpdate):
+class GenerationCharacterBlockCreate(GenerationStepCreate):
     pass
 
 
-class GenerationCharacterReviewRead(StrictModel):
+class GenerationCharacterBlockUpdate(GenerationStepUpdate):
+    pass
+
+
+class GenerationCharacterBlockRead(StrictModel):
     model_config = ConfigDict(from_attributes=True, extra="forbid")
     generation_id: UUID
     block: GenerationBlock

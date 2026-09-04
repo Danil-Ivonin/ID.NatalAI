@@ -89,9 +89,11 @@ async def test_astro_chart_service_checks_person_commits_and_signs_url() -> None
     from app.services.astro_chart_service import AstroChartService
 
     person_id = uuid4()
+    generation_id = uuid4()
     row = SimpleNamespace(
         id=uuid4(),
         person_id=person_id,
+        generation_id=generation_id,
         natal_xml="<chart />",
         chart_svg="charts/a.svg",
     )
@@ -105,6 +107,7 @@ async def test_astro_chart_service_checks_person_commits_and_signs_url() -> None
     created = await service.create(
         AstroChartCreate(
             person_id=person_id,
+            generation_id=generation_id,
             natal_xml="<chart />",
             chart_svg="charts/a.svg",
         )
@@ -112,6 +115,7 @@ async def test_astro_chart_service_checks_person_commits_and_signs_url() -> None
     updated = await service.update(row.id, AstroChartUpdate(chart_svg="charts/b.svg"))
 
     assert created.chart_svg == "https://s3.test/charts/a.svg"
+    assert created.generation_id == generation_id
     assert updated.id == row.id
     assert storage.keys == ["charts/a.svg", "charts/a.svg"]
     assert commit.calls == 2
@@ -122,10 +126,12 @@ async def test_generation_neutral_service_returns_typed_result_and_commits() -> 
     from app.services.generation_neutral_service import GenerationNeutralService
 
     person_id = uuid4()
+    generation_id = uuid4()
     result = neutral_result()
     row = SimpleNamespace(
         id=uuid4(),
         person_id=person_id,
+        generation_id=generation_id,
         used_model="model",
         prompt="prompt",
         token_usage={"total_tokens": 42},
@@ -139,6 +145,7 @@ async def test_generation_neutral_service_returns_typed_result_and_commits() -> 
     created = await service.create(
         GenerationNeutralCreate(
             person_id=person_id,
+            generation_id=generation_id,
             used_model="model",
             prompt="prompt",
             token_usage={"total_tokens": 42},
@@ -149,6 +156,7 @@ async def test_generation_neutral_service_returns_typed_result_and_commits() -> 
     await service.delete(row.id)
 
     assert created.result.blocks[0].id.value == "general"
+    assert created.generation_id == generation_id
     assert updated.id == row.id
     assert commit.calls == 3
 
@@ -245,10 +253,10 @@ async def test_generation_service_checks_parents_and_commits_crud() -> None:
             "Generation style plan not found",
         ),
         (
-            "app.services.generation_character_review_service",
-            "GenerationCharacterReviewService",
-            "GenerationCharacterReviewCreate",
-            "Generation character review not found",
+            "app.services.generation_character_block_service",
+            "GenerationCharacterBlockService",
+            "GenerationCharacterBlockCreate",
+            "Generation character block not found",
         ),
     ],
 )

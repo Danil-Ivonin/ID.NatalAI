@@ -113,10 +113,12 @@ async def test_generation_neutral_repository_crud_lifecycle() -> None:
     )
 
     person_id = uuid4()
+    generation_id = uuid4()
     create_session = FakeSession()
     created = await GenerationNeutralRepository(create_session).create(
         GenerationNeutralCreate(
             person_id=person_id,
+            generation_id=generation_id,
             used_model="openai/model",
             prompt="prompt",
             token_usage={"total_tokens": 42},
@@ -127,6 +129,7 @@ async def test_generation_neutral_repository_crud_lifecycle() -> None:
     repository = GenerationNeutralRepository(session)
 
     assert created.result["blocks"][0]["id"] == "general"
+    assert created.generation_id == generation_id
     assert await repository.list_by_person(person_id) == [created]
     sql = str(session.statements[0].compile(dialect=postgresql.dialect()))
     assert "generation_neutral.person_id" in sql
@@ -194,10 +197,10 @@ async def test_generation_repository_crud_lifecycle() -> None:
             "plan_id",
         ),
         (
-            "app.repositories.generation_character_review_repository",
-            "GenerationCharacterReviewRepository",
-            "GenerationCharacterReviewCreate",
-            "GenerationCharacterReviewUpdate",
+            "app.repositories.generation_character_block_repository",
+            "GenerationCharacterBlockRepository",
+            "GenerationCharacterBlockCreate",
+            "GenerationCharacterBlockUpdate",
             "id",
         ),
     ],

@@ -1,7 +1,9 @@
 from datetime import date, time
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.domain.users.enums import Sex
 
@@ -49,6 +51,13 @@ class PersonUpdate(BaseModel):
     birth_timezone: str | None = Field(default=None, min_length=1, max_length=255)
     birth_city: str | None = Field(default=None, min_length=1, max_length=255)
     birth_nation: str | None = Field(default=None, min_length=1, max_length=255)
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_nulls(cls, data: Any) -> Any:
+        if isinstance(data, dict) and any(value is None for value in data.values()):
+            raise ValueError("updated fields cannot be null")
+        return data
 
 
 class PersonRead(PersonBase):

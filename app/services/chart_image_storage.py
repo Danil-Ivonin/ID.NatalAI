@@ -7,7 +7,7 @@ from app.core.config import Settings
 
 
 class ChartImageStorage:
-    def __init__(self, settings: Settings, client=None) -> None:
+    def __init__(self, settings: Settings, client=None, presign_client=None) -> None:
         self.bucket = settings.chart_image_s3_bucket
         self.expires_seconds = settings.chart_image_url_expires_seconds
         self.client = client or boto3.client(
@@ -16,6 +16,17 @@ class ChartImageStorage:
             region_name=settings.chart_image_s3_region,
             aws_access_key_id=settings.chart_image_s3_access_key_id or None,
             aws_secret_access_key=settings.chart_image_s3_secret_access_key or None,
+        )
+        self.presign_client = presign_client or (
+            boto3.client(
+                "s3",
+                endpoint_url=settings.chart_image_public_endpoint_url,
+                region_name=settings.chart_image_s3_region,
+                aws_access_key_id=settings.chart_image_s3_access_key_id or None,
+                aws_secret_access_key=settings.chart_image_s3_secret_access_key or None,
+            )
+            if settings.chart_image_public_endpoint_url
+            else self.client
         )
 
     async def upload(self, object_key: str, content: bytes, mime_type: str) -> None:
@@ -30,7 +41,7 @@ class ChartImageStorage:
         )
 
     def presigned_url(self, object_key: str) -> str:
-        return self.client.generate_presigned_url(
+        return self.presign_client.generate_presigned_url(
             "get_object",
             Params={"Bucket": self.bucket, "Key": object_key},
             ExpiresIn=self.expires_seconds,

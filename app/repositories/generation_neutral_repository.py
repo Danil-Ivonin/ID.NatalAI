@@ -15,8 +15,14 @@ class GenerationNeutralRepository:
         self.session = session
 
     async def create(self, data: GenerationNeutralCreate) -> GenerationNeutral:
-        values = data.model_dump(mode="json", exclude={"person_id"})
-        row = GenerationNeutral(person_id=data.person_id, **values)
+        values = data.model_dump(
+            mode="json", exclude={"person_id", "generation_id"}
+        )
+        row = GenerationNeutral(
+            person_id=data.person_id,
+            generation_id=data.generation_id,
+            **values,
+        )
         self.session.add(row)
         await self.session.flush()
         return row

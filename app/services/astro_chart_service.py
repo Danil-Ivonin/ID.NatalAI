@@ -31,11 +31,15 @@ class AstroChartService:
             raise NotFoundError("Person not found")
 
     def _read(self, row: AstroChart) -> AstroChartRead:
+        chart_key = row.chart_svg
+        if row.generation_id is not None and row.chart_svg.lstrip().startswith("<svg"):
+            chart_key = f"generations/{row.generation_id}/natal-chart.svg"
         return AstroChartRead(
             id=row.id,
             person_id=row.person_id,
+            generation_id=row.generation_id,
             natal_xml=row.natal_xml,
-            chart_svg=self.storage.presigned_url(row.chart_svg),
+            chart_svg=self.storage.presigned_url(chart_key),
         )
 
     async def create(self, data: AstroChartCreate) -> AstroChartRead:

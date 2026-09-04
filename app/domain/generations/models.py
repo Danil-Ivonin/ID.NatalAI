@@ -70,7 +70,7 @@ class Generation(Base):
     style_plans: Mapped[list["GenerationStylePlan"]] = relationship(
         back_populates="generation", cascade="all, delete-orphan", passive_deletes=True
     )
-    character_reviews: Mapped[list["GenerationCharacterReview"]] = relationship(
+    character_blocks: Mapped[list["GenerationCharacterBlock"]] = relationship(
         back_populates="generation", cascade="all, delete-orphan", passive_deletes=True
     )
 
@@ -100,9 +100,9 @@ class GenerationStylePlan(Base):
     generation: Mapped[Generation] = relationship(back_populates="style_plans")
 
 
-class GenerationCharacterReview(Base):
-    __tablename__ = "generation_character_review"
-    __table_args__ = (Index("generation_character_review_generation_id_idx", "generation_id"),)
+class GenerationCharacterBlock(Base):
+    __tablename__ = "generation_character_blocks"
+    __table_args__ = (Index("generation_character_blocks_generation_id_idx", "generation_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()")
@@ -122,4 +122,4 @@ class GenerationCharacterReview(Base):
     token_usage: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     result: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
-    generation: Mapped[Generation] = relationship(back_populates="character_reviews")
+    generation: Mapped[Generation] = relationship(back_populates="character_blocks")

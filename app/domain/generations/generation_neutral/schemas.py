@@ -122,6 +122,16 @@ class GenerationNeutralResult(StrictModel):
             raise ValueError("hook IDs must be unique")
         return self
 
+
+class GenerationNeutralCreate(StrictModel):
+    person_id: UUID
+    generation_id: UUID | None = None
+    used_model: NonBlankStr
+    prompt: NonBlankStr
+    token_usage: dict[str, Any]
+    result: GenerationNeutralResult
+
+
 class GenerationNeutralUpdate(StrictModel):
     used_model: NonBlankStr | None = None
     prompt: NonBlankStr | None = None

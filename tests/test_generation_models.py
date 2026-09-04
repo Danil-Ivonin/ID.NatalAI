@@ -42,16 +42,20 @@ def test_generation_crud_models_match_relationship_contract() -> None:
 
     generations = Base.metadata.tables["generations"]
     plans = Base.metadata.tables["generation_style_plans"]
-    reviews = Base.metadata.tables["generation_character_review"]
+    blocks = Base.metadata.tables["generation_character_blocks"]
 
     assert str(generations.c.generation_id.server_default.arg) == "uuidv7()"
     assert str(plans.c.plan_id.server_default.arg) == "uuidv7()"
-    assert str(reviews.c.id.server_default.arg) == "uuidv7()"
+    assert str(blocks.c.id.server_default.arg) == "uuidv7()"
     assert generations.c.used_examples.type.item_type.python_type.__name__ == "UUID"
     assert generations.c.payment_id.nullable
     assert next(iter(generations.c.person_id.foreign_keys)).column.table.name == "persons"
     assert next(iter(generations.c.character_id.foreign_keys)).column.table.name == "characters"
     assert next(iter(plans.c.generation_id.foreign_keys)).ondelete == "CASCADE"
-    assert next(iter(reviews.c.generation_id.foreign_keys)).ondelete == "CASCADE"
+    assert next(iter(blocks.c.generation_id.foreign_keys)).ondelete == "CASCADE"
+    assert next(iter(Base.metadata.tables["astro_charts"].c.generation_id.foreign_keys)).ondelete == "CASCADE"
+    assert next(iter(Base.metadata.tables["generation_neutral"].c.generation_id.foreign_keys)).ondelete == "CASCADE"
+    assert next(index for index in Base.metadata.tables["astro_charts"].indexes if index.name == "astro_charts_generation_id_idx").unique
+    assert next(index for index in Base.metadata.tables["generation_neutral"].indexes if index.name == "generation_neutral_generation_id_idx").unique
     assert isinstance(plans.c.token_usage.type.dialect_impl(postgresql.dialect()), postgresql.JSONB)
-    assert isinstance(reviews.c.result.type.dialect_impl(postgresql.dialect()), postgresql.JSONB)
+    assert isinstance(blocks.c.result.type.dialect_impl(postgresql.dialect()), postgresql.JSONB)
