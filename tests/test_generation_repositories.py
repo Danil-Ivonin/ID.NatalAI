@@ -37,8 +37,9 @@ class FakeSession:
         self.flushed = 0
 
     def add(self, row) -> None:
-        if row.id is None:
-            row.id = uuid4()
+        primary_key = next(iter(row.__table__.primary_key)).name
+        if getattr(row, primary_key) is None:
+            setattr(row, primary_key, uuid4())
         self.added.append(row)
 
     async def get(self, model, row_id):
@@ -150,3 +151,84 @@ async def test_generation_repositories_return_missing_without_mutation() -> None
     assert not await GenerationNeutralRepository(session).delete(uuid4())
     assert session.flushed == 0
     assert session.deleted == []
+
+
+@pytest.mark.asyncio
+async def test_generation_repository_crud_lifecycle() -> None:
+    from app.domain.generations.schemas import GenerationCreate, GenerationUpdate
+    from app.repositories.generation_repository import GenerationRepository
+
+    person_id = uuid4()
+    create_session = FakeSession()
+    created = await GenerationRepository(create_session).create(
+        GenerationCreate(
+            person_id=person_id,
+            character_id=uuid4(),
+            used_examples=[uuid4()],
+            current_block="general",
+        )
+    )
+    session = FakeSession(get_result=created, execute_results=[[created]])
+    repository = GenerationRepository(session)
+
+    assert await repository.list_by_person(person_id) == [created]
+    assert "generations.person_id" in str(
+        session.statements[0].compile(dialect=postgresql.dialect())
+    )
+    assert await repository.update(
+        created.generation_id, GenerationUpdate(status="style_plan_generating")
+    ) is created
+    assert created.status == "style_plan_generating"
+    assert await repository.delete(created.generation_id)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("repository_module", "repository_name", "create_name", "update_name", "id_field"),
+    [
+        (
+            "app.repositories.generation_style_plan_repository",
+            "GenerationStylePlanRepository",
+            "GenerationStylePlanCreate",
+            "GenerationStylePlanUpdate",
+            "plan_id",
+        ),
+        (
+            "app.repositories.generation_character_review_repository",
+            "GenerationCharacterReviewRepository",
+            "GenerationCharacterReviewCreate",
+            "GenerationCharacterReviewUpdate",
+            "id",
+        ),
+    ],
+)
+async def test_generation_step_repositories_crud_lifecycle(
+    repository_module, repository_name, create_name, update_name, id_field
+) -> None:
+    from importlib import import_module
+
+    from app.domain.generations import schemas
+
+    repository_type = getattr(import_module(repository_module), repository_name)
+    generation_id = uuid4()
+    create_session = FakeSession()
+    created = await repository_type(create_session).create(
+        getattr(schemas, create_name)(
+            generation_id=generation_id,
+            block="love",
+            used_model="model",
+            prompt="prompt",
+            token_usage={"total": 1},
+            result={"text": "result"},
+        )
+    )
+    session = FakeSession(get_result=created, execute_results=[[created]])
+    repository = repository_type(session)
+    row_id = getattr(created, id_field)
+
+    assert await repository.list_by_generation(generation_id) == [created]
+    assert await repository.update(
+        row_id, getattr(schemas, update_name)(status="processing")
+    ) is created
+    assert created.status == "processing"
+    assert await repository.delete(row_id)

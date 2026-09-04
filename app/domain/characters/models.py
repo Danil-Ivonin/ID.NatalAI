@@ -4,7 +4,7 @@ from typing import Any
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import BigInteger, Boolean, Enum, ForeignKey, Identity, Index, Text, text, UUID
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.domain.characters.enums import CharacterEmotion, HumorType, SpeechPattern
@@ -33,6 +33,9 @@ class Character(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("uuidv7()"))
     name: Mapped[str] = mapped_column(Text, nullable=False)
     profile: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    generations: Mapped[list["Generation"]] = relationship(
+        back_populates="character", cascade="all, delete-orphan", passive_deletes=True
+    )
 
 
 class CharacterExample(Base):

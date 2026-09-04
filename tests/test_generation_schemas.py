@@ -158,3 +158,31 @@ def test_generation_result_preserves_from_alias_in_json() -> None:
         "to": "Moon",
         "aspect": "trine",
     }
+
+
+def test_generation_crud_schemas_use_requested_enums_and_defaults() -> None:
+    from app.domain.generations.schemas import (
+        GenerationBlock,
+        GenerationCreate,
+        GenerationProcessStatus,
+        GenerationStatus,
+    )
+
+    payload = GenerationCreate(
+        person_id=uuid4(),
+        character_id=uuid4(),
+        current_block="general",
+    )
+
+    assert list(GenerationBlock) == ["general", "love", "work_money", "inner_demons"]
+    assert list(GenerationStatus) == ["pending", "processing", "complited", "failed"]
+    assert list(GenerationProcessStatus) == [
+        "pending",
+        "style_plan_generating",
+        "character_review_generating",
+        "failed",
+    ]
+    assert payload.used_examples == []
+    assert payload.status is GenerationProcessStatus.PENDING
+    assert payload.payed is False
+    assert payload.payment_id is None

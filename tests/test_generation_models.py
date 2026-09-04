@@ -35,3 +35,23 @@ def test_person_has_generation_relationships() -> None:
     assert {"astro_charts", "generation_neutral"} <= {
         relationship.key for relationship in Person.__mapper__.relationships
     }
+
+
+def test_generation_crud_models_match_relationship_contract() -> None:
+    import app.db.models  # noqa: F401
+
+    generations = Base.metadata.tables["generations"]
+    plans = Base.metadata.tables["generation_style_plans"]
+    reviews = Base.metadata.tables["generation_character_review"]
+
+    assert str(generations.c.generation_id.server_default.arg) == "uuidv7()"
+    assert str(plans.c.plan_id.server_default.arg) == "uuidv7()"
+    assert str(reviews.c.id.server_default.arg) == "uuidv7()"
+    assert generations.c.used_examples.type.item_type.python_type.__name__ == "UUID"
+    assert generations.c.payment_id.nullable
+    assert next(iter(generations.c.person_id.foreign_keys)).column.table.name == "persons"
+    assert next(iter(generations.c.character_id.foreign_keys)).column.table.name == "characters"
+    assert next(iter(plans.c.generation_id.foreign_keys)).ondelete == "CASCADE"
+    assert next(iter(reviews.c.generation_id.foreign_keys)).ondelete == "CASCADE"
+    assert isinstance(plans.c.token_usage.type.dialect_impl(postgresql.dialect()), postgresql.JSONB)
+    assert isinstance(reviews.c.result.type.dialect_impl(postgresql.dialect()), postgresql.JSONB)

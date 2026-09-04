@@ -11,7 +11,10 @@ def test_metadata_contains_persistence_tables() -> None:
         "astro_charts",
         "character_examples",
         "characters",
+        "generation_character_review",
         "generation_neutral",
+        "generation_style_plans",
+        "generations",
         "persons",
         "users",
     ]

@@ -46,3 +46,6 @@ class Person(Base):
     generation_neutral: Mapped[list["GenerationNeutral"]] = relationship(
         back_populates="person", cascade="all, delete-orphan", passive_deletes=True
     )
+    generations: Mapped[list["Generation"]] = relationship(
+        back_populates="person", cascade="all, delete-orphan", passive_deletes=True
+    )

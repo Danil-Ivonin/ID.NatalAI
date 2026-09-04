@@ -17,14 +17,6 @@ NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length
 XmlDocument = Annotated[NonBlankStr, AfterValidator(_valid_xml)]
 
 
-class AstroChartCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    person_id: UUID
-    natal_xml: XmlDocument
-    chart_svg: NonBlankStr
-
-
 class AstroChartUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

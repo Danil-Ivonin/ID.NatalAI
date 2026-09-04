@@ -25,28 +25,10 @@ class BlockId(StrEnum):
     INNER_DEMONS = "inner_demons"
 
 
-class FactKind(StrEnum):
-    STRENGTH = "strength"
-    TENDENCY = "tendency"
-    TENSION = "tension"
-    RISK = "risk"
-    RESOURCE = "resource"
-    ADVICE = "advice"
-
-
 class Priority(StrEnum):
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
-
-
-class HookType(StrEnum):
-    CONTRADICTION = "contradiction"
-    SELF_DECEPTION = "self_deception"
-    RECURRING_PATTERN = "recurring_pattern"
-    EXPECTATION_VS_REALITY = "expectation_vs_reality"
-    AVOIDANCE = "avoidance"
-    MASK_VS_INNER_STATE = "mask_vs_inner_state"
 
 
 class PlacementEvidence(StrictModel):
@@ -82,7 +64,7 @@ Evidence = Annotated[
 class Fact(StrictModel):
     id: NonBlankStr
     statement: NonBlankStr
-    kind: FactKind
+    kind: NonBlankStr
     themes: list[NonBlankStr] = Field(min_length=1, max_length=4)
     importance: Priority
     evidence: list[Evidence] = Field(min_length=1)
@@ -90,7 +72,7 @@ class Fact(StrictModel):
 
 class Hook(StrictModel):
     id: NonBlankStr
-    type: HookType
+    type: NonBlankStr
     fact_ids: list[NonBlankStr] = Field(min_length=1)
     neutral_angle: NonBlankStr
     priority: Priority
@@ -139,15 +121,6 @@ class GenerationNeutralResult(StrictModel):
         if len(hook_ids) != len(set(hook_ids)):
             raise ValueError("hook IDs must be unique")
         return self
-
-
-class GenerationNeutralCreate(StrictModel):
-    person_id: UUID
-    used_model: NonBlankStr
-    prompt: NonBlankStr
-    token_usage: dict[str, Any]
-    result: GenerationNeutralResult
-
 
 class GenerationNeutralUpdate(StrictModel):
     used_model: NonBlankStr | None = None

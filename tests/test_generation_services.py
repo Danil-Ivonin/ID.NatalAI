@@ -59,6 +59,14 @@ class Repository:
         return self.row is not None
 
 
+class CharacterRepository:
+    def __init__(self, character=None) -> None:
+        self.character = character
+
+    async def get_profile(self, character_id):
+        return self.character
+
+
 def neutral_result() -> GenerationNeutralResult:
     return GenerationNeutralResult.model_validate(
         {
@@ -173,3 +181,111 @@ async def test_generation_services_reject_missing_person_and_resource() -> None:
         await neutral.delete(uuid4())
 
     assert commit.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_generation_service_checks_parents_and_commits_crud() -> None:
+    from app.domain.generations.schemas import GenerationCreate, GenerationUpdate
+    from app.services.generation_service import GenerationService
+
+    person_id = uuid4()
+    character_id = uuid4()
+    row = SimpleNamespace(
+        generation_id=uuid4(),
+        person_id=person_id,
+        character_id=character_id,
+        used_examples=[],
+        current_block="general",
+        status="pending",
+        payed=False,
+        payment_id=None,
+    )
+    commit = Commit()
+    service = GenerationService(
+        Repository(row),
+        UserRepository(SimpleNamespace()),
+        CharacterRepository(SimpleNamespace()),
+        commit,
+    )
+
+    created = await service.create(
+        GenerationCreate(
+            person_id=person_id,
+            character_id=character_id,
+            current_block="general",
+        )
+    )
+    await service.update(row.generation_id, GenerationUpdate(payed=True))
+    await service.delete(row.generation_id)
+
+    assert created.generation_id == row.generation_id
+    assert commit.calls == 3
+
+    missing = GenerationService(
+        Repository(), UserRepository(), CharacterRepository(), Commit()
+    )
+    with pytest.raises(NotFoundError, match="Person not found"):
+        await missing.create(
+            GenerationCreate(
+                person_id=person_id,
+                character_id=character_id,
+                current_block="general",
+            )
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("module", "service_name", "create_name", "not_found"),
+    [
+        (
+            "app.services.generation_style_plan_service",
+            "GenerationStylePlanService",
+            "GenerationStylePlanCreate",
+            "Generation style plan not found",
+        ),
+        (
+            "app.services.generation_character_review_service",
+            "GenerationCharacterReviewService",
+            "GenerationCharacterReviewCreate",
+            "Generation character review not found",
+        ),
+    ],
+)
+async def test_generation_step_services_require_generation_and_commit(
+    module, service_name, create_name, not_found
+) -> None:
+    from importlib import import_module
+
+    from app.domain.generations import schemas
+
+    row = SimpleNamespace(
+        id=uuid4(),
+        plan_id=uuid4(),
+        generation_id=uuid4(),
+        block="general",
+        status="pending",
+        used_model="model",
+        prompt="prompt",
+        token_usage={},
+        result={},
+    )
+    commit = Commit()
+    service_type = getattr(import_module(module), service_name)
+    service = service_type(Repository(row), Repository(row), commit)
+    payload = getattr(schemas, create_name)(
+        generation_id=row.generation_id,
+        block="general",
+        used_model="model",
+        prompt="prompt",
+        token_usage={},
+        result={},
+    )
+
+    assert (await service.create(payload)).generation_id == row.generation_id
+    await service.delete(row.id if "Review" in service_name else row.plan_id)
+    assert commit.calls == 2
+
+    missing = service_type(Repository(), Repository(), Commit())
+    with pytest.raises(NotFoundError, match="Generation not found"):
+        await missing.create(payload)

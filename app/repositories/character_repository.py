@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.characters.models import Character
@@ -26,13 +28,13 @@ class CharacterRepository:
         await self.session.flush()
         return self._to_profile(row)
 
-    async def get_profile(self, character_id: int) -> CharacterProfile | None:
+    async def get_profile(self, character_id: UUID) -> CharacterProfile | None:
         row = await self.session.get(Character, character_id)
         return None if row is None else self._to_profile(row)
 
     async def replace_profile(
         self,
-        character_id: int,
+        character_id: UUID,
         data: CharacterProfileCreate,
     ) -> CharacterProfile | None:
         row = await self.session.get(Character, character_id)
